@@ -13,6 +13,7 @@ from routes.analytics import router as analytics_router
 from routes.comparison import router as comparison_router
 from routes.reports import router as reports_router
 from routes.topics import router as topics_router
+from routes.mining import router as mining_router
 from database.mongodb import check_database_connection, documents_collection, chunks_collection
 
 app = FastAPI(
@@ -22,9 +23,18 @@ app = FastAPI(
 )
 
 # Enable CORS for frontend development and demo
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+    "http://localhost:3000",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -37,6 +47,7 @@ app.include_router(analytics_router)
 app.include_router(comparison_router)
 app.include_router(reports_router)
 app.include_router(topics_router)
+app.include_router(mining_router)
 
 
 @app.get("/api/status")
@@ -51,23 +62,57 @@ def api_status():
             "documents_count": documents_collection.count_documents({}),
             "chunks_count": chunks_collection.count_documents({}),
         },
-        "llm_model": "Ollama / qwen3:1.7b",
+        "ai_provider": ai_gateway.get_active_provider_name(),
+        "llm_model": f"{ai_gateway.get_active_provider_name().capitalize()} / {ai_gateway.get_active_model_name()}",
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
     }
+
+
+import requests
+from backend.services.ai import ai_gateway
+
+
+def check_ollama_status() -> dict:
+    try:
+        res = requests.get("http://127.0.0.1:11434/api/tags", timeout=3)
+        if res.status_code == 200:
+            models = [m.get("name") for m in res.json().get("models", [])]
+            return {
+                "available": True,
+                "model": "qwen3:1.7b",
+                "model_loaded": any("qwen3" in m for m in models),
+                "installed_models": models,
+            }
+    except Exception as exc:
+        return {"available": False, "model": "qwen3:1.7b", "model_loaded": False, "error": str(exc)}
+    return {"available": False, "model": "qwen3:1.7b", "model_loaded": False}
 
 
 @app.get("/health")
 def health_check():
     db_ok = check_database_connection()
+    llm_info = ai_gateway.check_health()
+    overall_ok = db_ok and llm_info.get("available", False)
+
     return {
-        "status": "healthy" if db_ok else "database_disconnected",
+        "status": "healthy" if overall_ok else ("partial_degraded" if db_ok else "database_disconnected"),
         "service": "CoalIntel Backend",
         "database_connected": db_ok,
-        "indexed_documents": documents_collection.count_documents({}),
-        "indexed_chunks": chunks_collection.count_documents({}),
-        "llm_model": "qwen3:1.7b",
+        "indexed_documents": documents_collection.count_documents({}) if db_ok else 0,
+        "indexed_chunks": chunks_collection.count_documents({}) if db_ok else 0,
+        "ai_provider": ai_gateway.get_active_provider_name(),
+        "llm_online": llm_info.get("available", False),
+        "llm_model": ai_gateway.get_active_model_name(),
+        "llm_model_ready": llm_info.get("model_loaded", False),
+        "llm_info": llm_info,
         "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
     }
+
+
+@app.get("/health/llm")
+def llm_health_check():
+    """Detailed health check of active AI provider and model."""
+    return ai_gateway.check_health()
 
 
 # Mount frontend build if built; otherwise provide fallback JSON root

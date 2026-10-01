@@ -1,248 +1,179 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Tags, 
-  Cloud, 
-  Clock, 
   Layers, 
-  Filter, 
-  Calendar,
-  Compass,
-  FileText
+  FileText, 
+  Bot, 
+  RefreshCw, 
+  BarChart2, 
+  ArrowRight,
+  ShieldCheck
 } from 'lucide-react';
+import PageHeader from './common/PageHeader';
+import StatusBadge from './common/StatusBadge';
+import DataTable from './common/DataTable';
+import EmptyState from './common/EmptyState';
+import LoadingState from './common/LoadingState';
 import { api } from '../api';
 
-export default function Topics() {
+export default function Topics({ onAskQuestion }) {
   const [topicData, setTopicData] = useState(null);
-  const [wordCloud, setWordCloud] = useState([]);
-  const [timeline, setTimeline] = useState([]);
-  const [selectedYear, setSelectedYear] = useState('');
-  const [activeTab, setActiveTab] = useState('topics'); // 'topics' | 'wordcloud' | 'timeline'
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadAll();
-  }, [selectedYear]);
+    loadTopics();
+  }, []);
 
-  async function loadAll() {
+  async function loadTopics() {
     setLoading(true);
     try {
-      const [tRes, wRes, timeRes] = await Promise.all([
-        api.getTopics(),
-        api.getWordCloud(null, null, 60),
-        api.getTimeline(selectedYear || null)
-      ]);
-      setTopicData(tRes);
-      setWordCloud(wRes.words || []);
-      setTimeline(timeRes.events || []);
+      const data = await api.getTopics();
+      setTopicData(data);
     } catch (e) {
-      console.error('Failed to load topics/timeline:', e);
+      console.error('Failed to load topic analysis:', e);
     } finally {
       setLoading(false);
     }
   }
 
-  const timelineYears = ['1975', '2019-20', '2020-21', '2021-22', '2022-23', '2023-24', '2024-25', '2025-26'];
+  const columns = [
+    {
+      header: 'Thematic Domain / Topic',
+      accessor: 'name',
+      render: (row) => (
+        <div>
+          <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{row.name}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>ID: {row.id}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Frequency & Chunk Coverage',
+      accessor: 'count',
+      width: '240px',
+      render: (row) => {
+        const pct = row.percentage || Math.round((row.count / (topicData?.total_chunks_analyzed || 1518)) * 100);
+        return (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11.5px', marginBottom: '3px' }}>
+              <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{row.count} chunks</span>
+              <span style={{ color: 'var(--text-muted)' }}>{pct}%</span>
+            </div>
+            <div style={{ 
+              width: '100%', 
+              height: '6px', 
+              backgroundColor: 'var(--bg-muted)', 
+              borderRadius: '3px', 
+              overflow: 'hidden' 
+            }}>
+              <div style={{ 
+                width: `${Math.min(pct, 100)}%`, 
+                height: '100%', 
+                backgroundColor: 'var(--accent-green)',
+                borderRadius: '3px' 
+              }}></div>
+            </div>
+          </div>
+        );
+      }
+    },
+    {
+      header: 'Representative Mining Terms',
+      accessor: 'representative_terms',
+      render: (row) => (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          {(row.representative_terms || []).slice(0, 5).map((term, idx) => (
+            <span 
+              key={idx} 
+              style={{
+                fontSize: '11px',
+                padding: '2px 6px',
+                backgroundColor: 'var(--bg-subtle)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-xs)',
+                color: 'var(--text-secondary)'
+              }}
+            >
+              {term}
+            </span>
+          ))}
+        </div>
+      )
+    },
+    {
+      header: 'Related Statutory Documents',
+      accessor: 'related_documents',
+      render: (row) => (
+        <div style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+          {(row.related_documents || []).length > 0 
+            ? row.related_documents.join(', ') 
+            : 'Cross-Document Statutory'}
+        </div>
+      )
+    },
+    {
+      header: 'Actions',
+      accessor: 'id',
+      align: 'right',
+      render: (row) => (
+        <button
+          onClick={() => onAskQuestion && onAskQuestion(`What are the primary operational findings regarding ${row.name} in the indexed mining reports?`)}
+          className="btn-subtle"
+          style={{ padding: '3px 8px', fontSize: '11.5px' }}
+          title="Query topic with AI Assistant"
+        >
+          <Bot size={12} />
+          <span>Ask AI</span>
+        </button>
+      )
+    }
+  ];
 
   return (
     <div>
-      {/* Title */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <Tags size={22} color="#FF6500" />
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF' }}>
-            Topic Identification, Word Cloud & Historical Timeline (Features 8, 9, 10)
-          </h2>
-        </div>
-        <p style={{ color: '#94A3B8', fontSize: '13px' }}>
-          Unsupervised topic classification across indexed reports, mining frequency clouds, and chronological policy milestones.
-        </p>
-      </div>
+      <PageHeader
+        title="Topic Analysis"
+        actions={
+          <button 
+            className="btn-secondary" 
+            onClick={loadTopics}
+            disabled={loading}
+          >
+            <RefreshCw size={13} />
+            <span>Refresh</span>
+          </button>
+        }
+      />
 
-      {/* Sub-navigation */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
-        <button
-          className={activeTab === 'topics' ? 'btn-primary' : 'btn-secondary'}
-          onClick={() => setActiveTab('topics')}
-        >
-          <Layers size={16} />
-          Topic Breakdown
-        </button>
-
-        <button
-          className={activeTab === 'wordcloud' ? 'btn-primary' : 'btn-secondary'}
-          onClick={() => setActiveTab('wordcloud')}
-        >
-          <Cloud size={16} />
-          Word Cloud
-        </button>
-
-        <button
-          className={activeTab === 'timeline' ? 'btn-primary' : 'btn-secondary'}
-          onClick={() => setActiveTab('timeline')}
-        >
-          <Clock size={16} />
-          Historical Timeline (1975 - 2026)
-        </button>
-      </div>
-
-      {/* TAB 1: Topics Breakdown */}
-      {activeTab === 'topics' && topicData && (
-        <div className="gov-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9' }}>
-              Mining Topic Coverage Across {topicData.total_chunks_analyzed} Indexed Chunks
-            </h3>
-            <span className="badge badge-info">8 Dominant Thematic Categories</span>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {topicData.topics?.map((t) => (
-              <div key={t.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px', marginBottom: '6px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ width: '12px', height: '12px', borderRadius: '3px', background: t.color }}></span>
-                    <strong style={{ color: '#F8FAFC' }}>{t.name}</strong>
-                  </div>
-                  <span style={{ color: '#94A3B8' }}>
-                    <strong style={{ color: '#F1F5F9' }}>{t.count}</strong> chunks ({t.percentage}%)
-                  </span>
-                </div>
-
-                <div style={{ width: '100%', height: '10px', background: '#0B1320', borderRadius: '5px', overflow: 'hidden' }}>
-                  <div style={{ 
-                    width: `${Math.max(5, t.percentage)}%`, 
-                    height: '100%', 
-                    background: t.color, 
-                    borderRadius: '5px',
-                    transition: 'width 0.4s ease'
-                  }} />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 2: Word Cloud */}
-      {activeTab === 'wordcloud' && (
-        <div className="gov-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9' }}>
-              Mining Frequency Cloud (Stopwords Filtered)
-            </h3>
-            <span className="badge badge-orange">{wordCloud.length} Prominent Mining Terms</span>
-          </div>
-
-          <div style={{ 
-            display: 'flex', 
-            flexWrap: 'wrap', 
-            gap: '12px', 
-            justifyContent: 'center', 
-            alignItems: 'center',
-            padding: '30px 20px',
-            background: '#0B1320',
-            borderRadius: '8px',
-            minHeight: '350px'
-          }}>
-            {wordCloud.map((w, idx) => {
-              const colors = ['#FF6500', '#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EC4899', '#38BDF8'];
-              const col = colors[idx % colors.length];
-              return (
-                <span
-                  key={idx}
-                  style={{
-                    fontSize: `${w.size}px`,
-                    fontWeight: w.size > 24 ? 800 : w.size > 18 ? 600 : 500,
-                    color: col,
-                    padding: '4px 8px',
-                    cursor: 'default',
-                    transition: 'transform 0.1s',
-                    userSelect: 'none'
-                  }}
-                  title={`Term: ${w.text} (${w.value} occurrences)`}
-                >
-                  {w.text}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* TAB 3: Historical Timeline */}
-      {activeTab === 'timeline' && (
-        <div className="gov-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '10px' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9' }}>
-              Chronological Mining & Governance Timeline (1975 — 2026)
-            </h3>
-
-            {/* Year Filter Buttons */}
-            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <button
-                onClick={() => setSelectedYear('')}
-                style={{
-                  background: selectedYear === '' ? '#FF6500' : '#182844',
-                  color: '#FFF', border: 'none', borderRadius: '4px',
-                  padding: '3px 10px', fontSize: '12px', cursor: 'pointer'
-                }}
-              >
-                All Years
-              </button>
-              {timelineYears.map((yr) => (
-                <button
-                  key={yr}
-                  onClick={() => setSelectedYear(yr)}
-                  style={{
-                    background: selectedYear === yr ? '#FF6500' : '#182844',
-                    color: '#FFF', border: 'none', borderRadius: '4px',
-                    padding: '3px 10px', fontSize: '12px', cursor: 'pointer'
-                  }}
-                >
-                  {yr}
-                </button>
-              ))}
+      {loading ? (
+        <LoadingState message="Extracting semantic topics from knowledge chunks..." />
+      ) : topicData?.topics?.length > 0 ? (
+        <div>
+          {/* Summary Overview Banner */}
+          <div className="gov-card" style={{ marginBottom: '16px', padding: '14px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Tags size={16} color="var(--accent-green)" />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Analysis Coverage: {topicData.total_chunks_analyzed || 1518} Chunks across {topicData.topics.length} Dominant Thematic Categories
+              </span>
             </div>
+            <span className="badge badge-neutral">Page-Aware TF-IDF & Dense Embeddings</span>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative', paddingLeft: '20px' }}>
-            <div style={{ position: 'absolute', left: '7px', top: '10px', bottom: '10px', width: '2px', background: '#1E3A5F' }} />
-
-            {timeline.map((item, idx) => (
-              <div key={idx} style={{ position: 'relative', paddingLeft: '20px' }}>
-                <div style={{ 
-                  position: 'absolute', 
-                  left: '-18px', 
-                  top: '4px', 
-                  width: '12px', 
-                  height: '12px', 
-                  borderRadius: '50%', 
-                  background: '#FF6500', 
-                  border: '2px solid #0B1320' 
-                }} />
-
-                <div style={{ background: '#0B1320', padding: '16px', borderRadius: '8px', border: '1px solid #14243B' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span className="badge badge-orange">{item.period || item.year}</span>
-                      <strong style={{ color: '#F1F5F9', fontSize: '15px' }}>{item.title}</strong>
-                    </div>
-                    <span className="badge badge-info">{item.category}</span>
-                  </div>
-
-                  <p style={{ color: '#CBD5E1', fontSize: '13px', lineHeight: '1.6', marginBottom: '8px' }}>
-                    {item.description}
-                  </p>
-
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#64748B' }}>
-                    <span>Citation: {item.source}</span>
-                    <span style={{ color: '#10B981', fontWeight: 600 }}>Impact: {item.impact}</span>
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* Restrained Table Layout */}
+          <div className="gov-card">
+            <DataTable
+              columns={columns}
+              data={topicData.topics}
+              keyField="id"
+            />
           </div>
         </div>
+      ) : (
+        <EmptyState
+          title="No topic models computed"
+          message="Topic clusters will appear once documents have been indexed and chunked in the MongoDB repository."
+        />
       )}
     </div>
   );

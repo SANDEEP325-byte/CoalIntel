@@ -1,244 +1,252 @@
 import React, { useState, useEffect } from 'react';
 import { 
   BarChart3, 
-  HelpCircle, 
   Filter, 
-  ExternalLink, 
   TrendingUp, 
-  ArrowUpRight, 
-  ArrowDownRight,
-  ShieldCheck,
-  FileText
+  ShieldCheck, 
+  Layers, 
+  FileText, 
+  ExternalLink,
+  Bot,
+  RefreshCw,
+  HardHat,
+  Truck,
+  Compass
 } from 'lucide-react';
+import PageHeader from './common/PageHeader';
+import MetricCard from './common/MetricCard';
+import StatusBadge from './common/StatusBadge';
+import DataTable from './common/DataTable';
+import EmptyState from './common/EmptyState';
+import LoadingState from './common/LoadingState';
 import { api } from '../api';
 
-export default function Analytics({ onSelectLineage }) {
+export default function Analytics({ onSelectLineage, onAskQuestion }) {
+  const [activeCategory, setActiveCategory] = useState('Production');
   const [kpis, setKpis] = useState([]);
-  const [whyChangeData, setWhyChangeData] = useState(null);
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [entityFilter, setEntityFilter] = useState('');
+  const [prodVsDispatch, setProdVsDispatch] = useState(null);
+  const [producers, setProducers] = useState([]);
+  const [documents, setDocuments] = useState([]);
+  const [selectedDoc, setSelectedDoc] = useState('');
+  const [selectedYear, setSelectedYear] = useState('2024-25');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadData();
-  }, [categoryFilter, entityFilter]);
+    loadInsightData();
+  }, [activeCategory, selectedDoc, selectedYear]);
 
-  async function loadData() {
+  async function loadInsightData() {
     setLoading(true);
     try {
-      const [kpiRes, whyRes] = await Promise.all([
-        api.getKPIs(categoryFilter || null, entityFilter || null),
-        api.getWhyChange()
+      const [kpiRes, pvdRes, prodRes, docRes] = await Promise.all([
+        api.getKPIs(activeCategory === 'Geological and Mining Activities' ? 'Exploration' : activeCategory, null, selectedYear || null).catch(() => ({ kpis: [] })),
+        api.getProductionVsDispatch().catch(() => null),
+        api.getProducersComparison().catch(() => ({ producers: [] })),
+        api.getDocuments().catch(() => ({ documents: [] }))
       ]);
       setKpis(kpiRes.kpis || []);
-      setWhyChangeData(whyRes);
+      setProdVsDispatch(pvdRes);
+      setProducers(prodRes.producers || []);
+      setDocuments(docRes.documents || []);
     } catch (e) {
-      console.error('Failed to load analytics:', e);
+      console.error('Failed to load mining insights data:', e);
     } finally {
       setLoading(false);
     }
   }
 
-  const categories = ['Production', 'Dispatch', 'Safety', 'Revenue & Profit', 'Exploration', 'Excavation & OBR'];
-  const entities = ['CIL', 'CMPDI', 'All India'];
+  const categoryTabs = [
+    { id: 'Production', label: 'Production', icon: Layers },
+    { id: 'Dispatch', label: 'Dispatch', icon: Truck },
+    { id: 'Mine Safety', label: 'Mine Safety', icon: HardHat },
+    { id: 'Geological and Mining Activities', label: 'Geological & Mining Activities', icon: Compass }
+  ];
+
+  const kpiColumns = [
+    {
+      header: 'Indicator / Metric',
+      accessor: 'metric_name',
+      render: (row) => (
+        <div>
+          <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{row.metric_name}</div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{row.category} • {row.entity || 'All India'}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Value',
+      accessor: 'value',
+      align: 'right',
+      render: (row) => (
+        <span style={{ fontWeight: 700, fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+          {row.value} {row.unit || ''}
+        </span>
+      )
+    },
+    {
+      header: 'Period / FY',
+      accessor: 'year',
+      render: (row) => <span className="badge badge-neutral">{row.year || '2024-25'}</span>
+    },
+    {
+      header: 'Source Document & Citation',
+      accessor: 'source_document',
+      render: (row) => (
+        <div style={{ fontSize: '11.5px' }}>
+          <div style={{ color: 'var(--text-secondary)', fontWeight: 500 }}>{row.source_document || 'Statutory Report'}</div>
+          <div style={{ color: 'var(--text-muted)' }}>Page {row.page_number ?? 'N/A'} • Chunk {row.chunk_id || '—'}</div>
+        </div>
+      )
+    },
+    {
+      header: 'Actions',
+      accessor: 'id',
+      align: 'right',
+      render: (row) => (
+        <button
+          onClick={() => onAskQuestion && onAskQuestion(`What are the details regarding ${row.metric_name} in ${row.source_document || 'the report'}?`)}
+          className="btn-subtle"
+          style={{ padding: '3px 8px', fontSize: '11px' }}
+        >
+          <Bot size={12} />
+          <span>Ask AI</span>
+        </button>
+      )
+    }
+  ];
 
   return (
     <div>
-      {/* Title */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <BarChart3 size={22} color="#FF6500" />
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF' }}>
-            Mining KPI Intelligence & Analytics (Feature 3 & 12)
-          </h2>
-        </div>
-        <p style={{ color: '#94A3B8', fontSize: '13px' }}>
-          Automatically extracted mining metrics with verified page lineage and evidence-backed root cause explanations.
-        </p>
+      <PageHeader
+        title="Mining Insights"
+        actions={
+          <button 
+            className="btn-secondary" 
+            onClick={loadInsightData}
+            disabled={loading}
+          >
+            <RefreshCw size={13} />
+            <span>Refresh</span>
+          </button>
+        }
+      />
+
+      {/* Primary Category Switcher */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '10px', flexWrap: 'wrap' }}>
+        {categoryTabs.map((cat) => {
+          const Icon = cat.icon;
+          const isActive = activeCategory === cat.id;
+          return (
+            <button
+              key={cat.id}
+              onClick={() => setActiveCategory(cat.id)}
+              className={isActive ? 'btn-primary' : 'btn-secondary'}
+              style={{ padding: '6px 12px' }}
+            >
+              <Icon size={14} />
+              <span>{cat.label}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Filter Bar */}
-      <div className="gov-card" style={{ marginBottom: '20px', padding: '14px 20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#94A3B8', fontSize: '13px' }}>
-            <Filter size={15} />
-            <strong>Filters:</strong>
+      <div className="gov-card" style={{ marginBottom: '16px', padding: '12px 16px' }}>
+        <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-muted)', fontSize: '12.5px', fontWeight: 600 }}>
+            <Filter size={14} />
+            <span>Filter By:</span>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => setCategoryFilter('')}
-              style={{
-                background: categoryFilter === '' ? '#FF6500' : '#182844',
-                color: '#FFF',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 12px',
-                fontSize: '12px',
-                cursor: 'pointer'
-              }}
+          <div style={{ width: '220px' }}>
+            <select
+              value={selectedDoc}
+              onChange={(e) => setSelectedDoc(e.target.value)}
+              className="form-select"
+              style={{ height: '32px', fontSize: '12.5px' }}
             >
-              All Categories
+              <option value="">All Source Documents</option>
+              {documents.map((d) => (
+                <option key={d.id || d.filename} value={d.filename}>{d.filename}</option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ width: '150px' }}>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="form-select"
+              style={{ height: '32px', fontSize: '12.5px' }}
+            >
+              <option value="">All Fiscal Years</option>
+              <option value="2024-25">FY 2024-25</option>
+              <option value="2023-24">FY 2023-24</option>
+              <option value="2022-23">FY 2022-23</option>
+            </select>
+          </div>
+
+          {(selectedDoc || selectedYear !== '2024-25') && (
+            <button
+              onClick={() => {
+                setSelectedDoc('');
+                setSelectedYear('2024-25');
+              }}
+              className="btn-subtle"
+              style={{ fontSize: '12px' }}
+            >
+              Reset Filters
             </button>
-            {categories.map((c) => (
-              <button
-                key={c}
-                onClick={() => setCategoryFilter(c)}
-                style={{
-                  background: categoryFilter === c ? '#FF6500' : '#182844',
-                  color: '#FFF',
-                  border: 'none',
-                  borderRadius: '4px',
-                  padding: '4px 12px',
-                  fontSize: '12px',
-                  cursor: 'pointer'
-                }}
-              >
-                {c}
-              </button>
+          )}
+        </div>
+      </div>
+
+      {/* Real Mining Insight Display */}
+      {loading ? (
+        <LoadingState message="Extracting structured metrics from indexed reports..." />
+      ) : kpis.length > 0 ? (
+        <div>
+          {/* Top Metric Cards */}
+          <div className="grid-3" style={{ marginBottom: '16px' }}>
+            {kpis.slice(0, 3).map((k, idx) => (
+              <MetricCard
+                key={idx}
+                title={k.metric_name}
+                value={`${k.value} ${k.unit || ''}`}
+                subtitle={`Source: ${k.source_document || 'Statutory Filing'}`}
+                icon={TrendingUp}
+                badgeText={k.year || '2024-25'}
+                badgeType="green"
+              />
             ))}
           </div>
 
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
-            <select
-              value={entityFilter}
-              onChange={(e) => setEntityFilter(e.target.value)}
-              style={{
-                background: '#0B1320',
-                border: '1px solid #1E3A5F',
-                borderRadius: '6px',
-                padding: '4px 10px',
-                color: '#CBD5E1',
-                fontSize: '12px'
-              }}
-            >
-              <option value="">All Entities</option>
-              {entities.map(e => <option key={e} value={e}>{e}</option>)}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI Extracted Metrics Table */}
-      <div className="gov-card" style={{ marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9' }}>
-            Mining Key Performance Indicators ({kpis.length})
-          </h3>
-          <span className="badge badge-success">Zero Fabricated Values</span>
-        </div>
-
-        <div className="gov-table-wrapper">
-          <table className="gov-table">
-            <thead>
-              <tr>
-                <th>Category</th>
-                <th>Metric Name</th>
-                <th>Entity</th>
-                <th>Year</th>
-                <th>Value & Unit</th>
-                <th>YoY Change</th>
-                <th>Source & Page Citation</th>
-                <th>Status & Traceability</th>
-              </tr>
-            </thead>
-            <tbody>
-              {kpis.map((k) => (
-                <tr key={k.id}>
-                  <td><span className="badge badge-orange">{k.category}</span></td>
-                  <td><strong style={{ color: '#F8FAFC' }}>{k.metric}</strong></td>
-                  <td><span className="badge badge-info">{k.entity}</span></td>
-                  <td>{k.year}</td>
-                  <td>
-                    <span style={{ fontSize: '15px', fontWeight: 800, color: '#FF6500' }}>
-                      {k.value} <span style={{ fontSize: '12px', fontWeight: 600, color: '#94A3B8' }}>{k.unit}</span>
-                    </span>
-                  </td>
-                  <td>
-                    {k.change_pct !== undefined && (
-                      <span style={{ 
-                        color: k.change_pct >= 0 ? '#10B981' : '#EF4444',
-                        fontWeight: 700,
-                        fontSize: '12px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '2px'
-                      }}>
-                        {k.change_pct >= 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                        {k.change_pct > 0 ? `+${k.change_pct}%` : `${k.change_pct}%`}
-                      </span>
-                    )}
-                  </td>
-                  <td>
-                    <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ color: '#3B82F6', fontWeight: 600 }}>{k.source_document}</span>
-                      <span style={{ color: '#FF6500', fontWeight: 700 }}>Page {k.page_number}</span>
-                    </div>
-                  </td>
-                  <td>
-                    <span style={{ fontSize: '12px', color: '#94A3B8' }}>{k.status}</span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Feature 12: "Why Did This Change?" Root Cause Explanations */}
-      {whyChangeData && (
-        <div className="gov-card" style={{ borderLeft: '4px solid #3B82F6' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-            <HelpCircle size={20} color="#3B82F6" />
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9' }}>
-              Feature 12 — "Why Did This Change?" (Evidence-Backed Root Cause Analysis)
-            </h3>
-          </div>
-          <p style={{ color: '#94A3B8', fontSize: '13px', marginBottom: '16px' }}>
-            Explains critical year-over-year operational shifts strictly citing statutory excerpts without speculative hallucination.
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
-            <div style={{ background: '#0B1320', padding: '16px', borderRadius: '8px', border: '1px solid #1E3A5F' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <TrendingUp size={16} color="#10B981" />
-                <strong style={{ color: '#F1F5F9', fontSize: '14px' }}>Why did National Coal Production cross 1 Billion Tonnes?</strong>
-              </div>
-              <p style={{ fontSize: '13px', color: '#CBD5E1', lineHeight: '1.5' }}>
-                {whyChangeData.why_did_this_change?.production}
-              </p>
-              <div style={{ marginTop: '10px', fontSize: '11px', color: '#64748B' }}>
-                Grounding: Coal & Lignite Production Report 2025-26, Page 4
-              </div>
+          {/* Structured KPI Table */}
+          <div className="gov-card">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '13.5px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                {activeCategory} Operational Metrics ({kpis.length})
+              </h3>
+              <span className="badge badge-neutral" style={{ fontSize: '11px' }}>
+                Audited & Page-Cited
+              </span>
             </div>
 
-            <div style={{ background: '#0B1320', padding: '16px', borderRadius: '8px', border: '1px solid #1E3A5F' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <TrendingUp size={16} color="#FF6500" />
-                <strong style={{ color: '#F1F5F9', fontSize: '14px' }}>Why did CIL Coal Dispatch grow to 762.83 MT?</strong>
-              </div>
-              <p style={{ fontSize: '13px', color: '#CBD5E1', lineHeight: '1.5' }}>
-                {whyChangeData.why_did_this_change?.dispatch}
-              </p>
-              <div style={{ marginTop: '10px', fontSize: '11px', color: '#64748B' }}>
-                Grounding: Coal & Lignite Production Report 2025-26, Page 4
-              </div>
-            </div>
-
-            <div style={{ background: '#0B1320', padding: '16px', borderRadius: '8px', border: '1px solid #1E3A5F' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-                <ShieldCheck size={16} color="#EF4444" />
-                <strong style={{ color: '#F1F5F9', fontSize: '14px' }}>Why did Safety Statistics fluctuate between 2024 and 2025?</strong>
-              </div>
-              <p style={{ fontSize: '13px', color: '#CBD5E1', lineHeight: '1.5' }}>
-                {whyChangeData.why_did_this_change?.safety}
-              </p>
-              <div style={{ marginTop: '10px', fontSize: '11px', color: '#64748B' }}>
-                Grounding: Safety in Coal Mines Report 2025-26, Page 21
-              </div>
-            </div>
+            <DataTable
+              columns={kpiColumns}
+              data={kpis}
+              keyField="metric_name"
+            />
           </div>
         </div>
+      ) : (
+        /* Required Empty State for Unavailable Structured Data */
+        <EmptyState
+          title="Structured insight data is not available yet."
+          message="Use the AI Assistant to retrieve evidence from indexed reports."
+          actionLabel="Open AI Assistant"
+          onAction={() => onAskQuestion && onAskQuestion(`What are the key statistics regarding ${activeCategory}?`)}
+        />
       )}
     </div>
   );

@@ -1,6 +1,6 @@
 @echo off
 echo ========================================================
-echo  Starting CoalIntel Backend (FastAPI + MongoDB + Ollama)
+echo  Starting CoalIntel Backend (FastAPI + MongoDB + Gemini)
 echo ========================================================
 cd /d "%~dp0"
 call .venv\Scripts\activate.bat

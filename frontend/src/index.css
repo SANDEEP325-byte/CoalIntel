@@ -1,24 +1,70 @@
+/* ==========================================================================
+   CoalIntel — Mining Operations Information System
+   Design System & Enterprise Theme (Ministry of Coal / CMPDI / CIL)
+   ========================================================================== */
+
 :root {
-  --bg-main: #0B1320;
-  --bg-card: #111E33;
-  --bg-elevated: #182844;
-  --bg-hover: #1E3355;
-  --border-subtle: #1E3A5F;
-  --border-active: #FF6500;
-  --primary-accent: #FF6500;
-  --primary-hover: #E05800;
-  --success: #10B981;
-  --success-bg: rgba(16, 185, 129, 0.12);
-  --warning: #F59E0B;
-  --warning-bg: rgba(245, 158, 11, 0.12);
-  --danger: #EF4444;
-  --danger-bg: rgba(239, 68, 68, 0.12);
-  --info: #3B82F6;
-  --info-bg: rgba(59, 130, 246, 0.12);
-  --text-main: #F8FAFC;
-  --text-muted: #94A3B8;
-  --text-dim: #64748B;
-  --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  /* Surface & Backgrounds */
+  --bg-app: #F5F6F8;
+  --bg-surface: #FFFFFF;
+  --bg-subtle: #F8FAFC;
+  --bg-muted: #F1F5F9;
+  --bg-hover: #F8FAFC;
+
+  /* Typography & Slate Hierarchy */
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
+  --text-dim: #94A3B8;
+
+  /* Borders & Dividers */
+  --border-color: #E2E8F0;
+  --border-strong: #CBD5E1;
+  --border-focus: #166534;
+
+  /* Enterprise Accent: Muted Deep Green (Mining / Industry) */
+  --accent-green: #166534;
+  --accent-green-hover: #14532D;
+  --accent-green-active: #052E16;
+  --accent-green-tint: #F0FDF4;
+  --accent-green-border: #BBF7D0;
+
+  /* Corporate Dark Navy (for left navigation & headers) */
+  --navy-dark: #0F172A;
+  --navy-surface: #1E293B;
+  --navy-border: #334155;
+
+  /* Status Colors */
+  --color-success: #15803D;
+  --color-success-bg: #F0FDF4;
+  --color-success-border: #BBF7D0;
+
+  --color-warning: #B45309;
+  --color-warning-bg: #FFFBEB;
+  --color-warning-border: #FDE68A;
+
+  --color-danger: #B91C1C;
+  --color-danger-bg: #FEF2F2;
+  --color-danger-border: #FECACA;
+
+  --color-info: #0369A1;
+  --color-info-bg: #F0F9FF;
+  --color-info-border: #BAE6FD;
+
+  /* Layout & Geometry */
+  --radius-xs: 3px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+
+  /* Subtle Shadows */
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+  --shadow-sm: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.08), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+
+  /* Font Stack */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
 }
 
 * {
@@ -27,168 +73,270 @@
   padding: 0;
 }
 
-body {
-  background-color: var(--bg-main);
-  color: var(--text-main);
-  font-family: var(--font-main);
+html, body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
 }
 
-/* Scrollbars */
+/* ==========================================================================
+   Clean Enterprise Scrollbars
+   ========================================================================== */
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-main);
+  background: var(--bg-muted);
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--border-subtle);
-  border-radius: 4px;
+  background: var(--border-strong);
+  border-radius: var(--radius-xs);
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--text-dim);
 }
 
-/* Layout Utilities */
-.app-container {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
-
-.main-content {
-  flex: 1;
-  padding: 24px 32px;
-  max-width: 1600px;
-  margin: 0 auto;
-  width: 100%;
-}
-
-/* Cards & Containers */
+/* ==========================================================================
+   Enterprise Layout Containers & Cards
+   ========================================================================== */
 .gov-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   padding: 20px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-.gov-card:hover {
-  border-color: #2D4D77;
+  box-shadow: var(--shadow-xs);
 }
 
-/* Buttons */
+.gov-card-compact {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-xs);
+}
+
+/* ==========================================================================
+   Buttons
+   ========================================================================== */
 .btn-primary {
-  background: var(--primary-accent);
+  background-color: var(--accent-green);
   color: #FFFFFF;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
+  border: 1px solid var(--accent-green-active);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 13px;
   font-weight: 600;
-  font-size: 14px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  transition: background 0.15s, transform 0.05s;
+  gap: 6px;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  line-height: 1.25;
 }
-.btn-primary:hover {
-  background: var(--primary-hover);
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-green-hover);
 }
-.btn-primary:active {
-  transform: scale(0.98);
+.btn-primary:active:not(:disabled) {
+  background-color: var(--accent-green-active);
+}
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-secondary {
-  background: var(--bg-elevated);
-  color: var(--text-main);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  padding: 8px 16px;
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  font-size: 13px;
   font-weight: 500;
-  font-size: 14px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  transition: background 0.15s, border-color 0.15s;
+  gap: 6px;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  line-height: 1.25;
 }
-.btn-secondary:hover {
-  background: var(--bg-hover);
-  border-color: #385E8A;
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--bg-subtle);
+  color: var(--text-primary);
+  border-color: #94A3B8;
+}
+.btn-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
-/* Badges */
+.btn-subtle {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.btn-subtle:hover {
+  background-color: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   Form Controls & Inputs
+   ========================================================================== */
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 13.5px;
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--accent-green);
+  box-shadow: 0 0 0 2px rgba(22, 101, 52, 0.15);
+}
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: var(--text-dim);
+}
+
+/* ==========================================================================
+   Badges (Crisp, Non-Glowing, Non-Neon)
+   ========================================================================== */
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  font-size: 11.5px;
   font-weight: 600;
+  line-height: 1.35;
 }
-.badge-success { background: var(--success-bg); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.3); }
-.badge-warning { background: var(--warning-bg); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.3); }
-.badge-danger  { background: var(--danger-bg);  color: var(--danger);  border: 1px solid rgba(239, 68, 68, 0.3); }
-.badge-info    { background: var(--info-bg);    color: var(--info);    border: 1px solid rgba(59, 130, 246, 0.3); }
-.badge-orange  { background: rgba(255, 101, 0, 0.15); color: #FF6500; border: 1px solid rgba(255, 101, 0, 0.3); }
+.badge-success {
+  background-color: var(--color-success-bg);
+  color: var(--color-success);
+  border: 1px solid var(--color-success-border);
+}
+.badge-warning {
+  background-color: var(--color-warning-bg);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+}
+.badge-danger {
+  background-color: var(--color-danger-bg);
+  color: var(--color-danger);
+  border: 1px solid var(--color-danger-border);
+}
+.badge-info {
+  background-color: var(--color-info-bg);
+  color: var(--color-info);
+  border: 1px solid var(--color-info-border);
+}
+.badge-neutral {
+  background-color: var(--bg-muted);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+}
+.badge-green {
+  background-color: var(--accent-green-tint);
+  color: var(--accent-green);
+  border: 1px solid var(--accent-green-border);
+}
 
-/* Status Pulse */
-.pulse-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--success);
-  box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
-  animation: pulse 2s infinite;
-}
-@keyframes pulse {
-  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
-  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(16, 185, 129, 0); }
-  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-}
-
-/* Tables */
+/* ==========================================================================
+   Enterprise Data Tables
+   ========================================================================== */
 .gov-table-wrapper {
   width: 100%;
   overflow-x: auto;
-  border-radius: 8px;
-  border: 1px solid var(--border-subtle);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background-color: var(--bg-surface);
 }
 .gov-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 14px;
+  font-size: 13px;
 }
 .gov-table th {
-  background: var(--bg-elevated);
-  color: var(--text-muted);
+  background-color: var(--bg-subtle);
+  color: var(--text-secondary);
   font-weight: 600;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-color);
   white-space: nowrap;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 .gov-table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid #14243B;
-  color: var(--text-main);
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-primary);
+  vertical-align: middle;
 }
-.gov-table tr:hover td {
-  background: rgba(255, 255, 255, 0.02);
+.gov-table tr:last-child td {
+  border-bottom: none;
+}
+.gov-table tbody tr:hover {
+  background-color: var(--bg-subtle);
 }
 
-/* Grid Utilities */
-.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
-.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+/* ==========================================================================
+   Status Indicator Dots (Subtle, No Glowing Neon)
+   ========================================================================== */
+.status-indicator-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.status-indicator-dot.online {
+  background-color: var(--color-success);
+}
+.status-indicator-dot.offline {
+  background-color: var(--color-danger);
+}
+.status-indicator-dot.warning {
+  background-color: var(--color-warning);
+}
+
+/* ==========================================================================
+   Grid & Layout Utilities
+   ========================================================================== */
+.grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
 
 @media (max-width: 1024px) {
   .grid-4 { grid-template-columns: repeat(2, 1fr); }
   .grid-3 { grid-template-columns: 1fr; }
   .grid-2 { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .grid-4 { grid-template-columns: 1fr; }
 }

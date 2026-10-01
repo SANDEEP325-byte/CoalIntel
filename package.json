@@ -1,0 +1,16 @@
+{
+  "name": "coalintel",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CoalIntel — AI-Powered Mining Knowledge, Reporting and Decision Intelligence Platform",
+  "scripts": {
+    "all": "run_all.bat",
+    "backend": "run_backend.bat",
+    "frontend": "run_frontend.bat",
+    "dev": "npm --prefix frontend run dev",
+    "host": "npm --prefix frontend run dev -- --host",
+    "build": "npm --prefix frontend run build",
+    "preview": "npm --prefix frontend run preview",
+    "start": "run_all.bat"
+  }
+}

@@ -1,9 +1,19 @@
+import os
+
+# Prevent unnecessary network pings when running local sentence-transformers
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+
 from sentence_transformers import SentenceTransformer
 
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
-model = SentenceTransformer(MODEL_NAME)
+try:
+    model = SentenceTransformer(MODEL_NAME, local_files_only=True)
+except Exception:
+    model = SentenceTransformer(MODEL_NAME)
+
 
 
 def generate_embedding(text: str) -> list[float]:

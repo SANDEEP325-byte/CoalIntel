@@ -81,14 +81,28 @@ export const api = {
   },
 
   // Reports & Parliamentary
-  generateReport: (title = 'Annual Mining Performance & Decision Intelligence Report') =>
+  getReportTemplates: () => request('/reports/templates'),
+  generateReport: (title = 'Annual Mining Performance & Decision Intelligence Report', report_type = 'comprehensive_annual', year = '2024-25', subsidiary = null) =>
     request('/reports/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title }),
+      body: JSON.stringify({ 
+        title, 
+        report_type, 
+        year, 
+        subsidiary: subsidiary || undefined 
+      }),
     }),
-  getDocxDownloadUrl: (title = 'Annual Mining Performance & Decision Intelligence Report') =>
-    `${API_BASE}/reports/download/docx?title=${encodeURIComponent(title)}`,
+  getDocxDownloadUrl: (title = 'Annual Mining Performance & Decision Intelligence Report', report_type = 'comprehensive_annual', year = '2024-25', subsidiary = null) => {
+    const params = new URLSearchParams({
+      title,
+      report_type,
+      year
+    });
+    if (subsidiary) params.append('subsidiary', subsidiary);
+    return `${API_BASE}/reports/download/docx?${params.toString()}`;
+  },
+  downloadKpiCsvUrl: () => `${API_BASE}/reports/download/csv`,
   askParliamentary: (question) =>
     request('/reports/parliamentary', {
       method: 'POST',
@@ -112,4 +126,17 @@ export const api = {
   },
   getTimeline: (year = null) =>
     request(year ? `/topics/timeline?year=${encodeURIComponent(year)}` : '/topics/timeline'),
+
+  // Mining Decision Briefs
+  getPresetDecisionBriefs: () => request('/mining/decision-briefs'),
+  getDecisionBrief: (topic, documentId = null) =>
+    request('/mining/decision-brief', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ topic, document_id: documentId }),
+    }),
+  getProductionVsDispatch: () => request('/mining/production-vs-dispatch'),
+  getProducersComparison: () => request('/mining/producers-comparison'),
+  getMiningStats: (documentId = null) =>
+    request(documentId ? `/mining/extracted-statistics?document_id=${encodeURIComponent(documentId)}` : '/mining/extracted-statistics'),
 };

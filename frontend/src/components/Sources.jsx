@@ -10,6 +10,8 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 
+import PageHeader from './common/PageHeader';
+
 export default function Sources() {
   const [lineageData, setLineageData] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -43,25 +45,14 @@ export default function Sources() {
 
   return (
     <div>
-      {/* Title */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <Network size={22} color="#FF6500" />
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF' }}>
-            Data Lineage & Verified Provenance Explorer (Feature 14)
-          </h2>
-          <span className="badge badge-success">100% Page Traceability</span>
-        </div>
-        <p style={{ color: '#94A3B8', fontSize: '13px' }}>
-          Unbroken provenance path for every dashboard indicator: 
-          <strong> Metric ➔ Extracted Value ➔ Source PDF ➔ Exact Page ➔ Table Cell / Verbatim Quote</strong>.
-        </p>
-      </div>
+      <PageHeader
+        title="Source Provenance"
+      />
 
       {/* Search Bar */}
       <div className="gov-card" style={{ marginBottom: '20px', padding: '14px 20px' }}>
         <div style={{ position: 'relative' }}>
-          <Search size={16} color="#64748B" style={{ position: 'absolute', left: '14px', top: '12px' }} />
+          <Search size={16} color="#1a1b1d" style={{ position: 'absolute', left: '14px', top: '12px' }} />
           <input
             type="text"
             placeholder="Search metric name, entity (CIL, CMPDI), or document..."
@@ -69,11 +60,11 @@ export default function Sources() {
             onChange={(e) => setSearchTerm(e.target.value)}
             style={{
               width: '100%',
-              background: '#0B1320',
-              border: '1px solid #1E3A5F',
+              background: '#cfd5de',
+              border: '1px solid #87919d',
               borderRadius: '6px',
               padding: '10px 14px 10px 40px',
-              color: '#F1F5F9',
+              color: '#2c3c4c',
               fontSize: '13px',
               outline: 'none',
             }}
@@ -84,10 +75,10 @@ export default function Sources() {
       {/* Lineage Table */}
       <div className="gov-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9' }}>
+          <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#1d1f22' }}>
             Provenance Traceability Graph ({filteredRecords.length} Metrics)
           </h3>
-          <span style={{ fontSize: '12px', color: '#64748B' }}>
+          <span style={{ fontSize: '12px', color: '#0f1a29' }}>
             {lineageData?.traceability_guarantee}
           </span>
         </div>
@@ -111,7 +102,7 @@ export default function Sources() {
                 <tr key={rec.metric_id}>
                   <td><span className="badge badge-orange">{rec.category}</span></td>
                   <td>
-                    <strong style={{ color: '#F8FAFC' }}>{rec.metric_name}</strong>
+                    <strong style={{ color: '#1a1a1a' }}>{rec.metric_name}</strong>
                     <div style={{ fontSize: '11px', color: '#3B82F6' }}>Entity: {rec.entity} ({rec.year})</div>
                   </td>
                   <td>
@@ -121,22 +112,22 @@ export default function Sources() {
                   </td>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <FileText size={14} color="#94A3B8" />
-                      <span style={{ fontSize: '12px', color: '#E2E8F0' }}>{rec.source_document}</span>
+                      <FileText size={14} color="#2e3239" />
+                      <span style={{ fontSize: '12px', color: '#252a30' }}>{rec.source_document}</span>
                     </div>
                   </td>
                   <td>
                     <strong style={{ color: '#10B981', fontSize: '14px' }}>Page {rec.page_number}</strong>
                   </td>
-                  <td style={{ fontSize: '12px', color: '#94A3B8' }}>
+                  <td style={{ fontSize: '12px', color: '#293341' }}>
                     <code>{rec.table_reference}</code>
                   </td>
                   <td style={{ maxWidth: '280px' }}>
                     <div style={{ 
                       fontSize: '11px', 
-                      color: '#CBD5E1', 
+                      color: '#141414', 
                       fontStyle: 'italic',
-                      background: '#0B1320',
+                      background: '#c8cfd9',
                       padding: '6px 8px',
                       borderRadius: '4px',
                       maxHeight: '75px',

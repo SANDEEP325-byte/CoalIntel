@@ -10,6 +10,9 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 
+import PageHeader from './common/PageHeader';
+import LoadingState from './common/LoadingState';
+
 export default function Parliamentary() {
   const [question, setQuestion] = useState("What was Coal India's coal dispatch and production in FY 2024-25?");
   const [response, setResponse] = useState(null);
@@ -61,39 +64,21 @@ STATUS: ${response.verification_status}
 
   return (
     <div>
-      {/* Title */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <Landmark size={22} color="#FF6500" />
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF' }}>
-            Parliamentary & High-Priority Query Assistant (Feature 5)
-          </h2>
-          <span className="badge badge-orange">Lok Sabha / Rajya Sabha Briefing Engine</span>
-        </div>
-        <p style={{ color: '#94A3B8', fontSize: '13px' }}>
-          Translates high-stakes queries into official Government of India secretariat responses with verified tabular annexures.
-        </p>
-      </div>
+      <PageHeader
+        title="Parliamentary QA"
+      />
 
       {/* Query Bar */}
-      <div className="gov-card" style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
+      <div className="gov-card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
+        <div style={{ display: 'flex', gap: '10px', marginBottom: '12px' }}>
           <input
             type="text"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleAsk()}
             placeholder="Enter Starred / Unstarred Parliamentary question..."
-            style={{
-              flex: 1,
-              background: '#0B1320',
-              border: '1px solid #1E3A5F',
-              borderRadius: '8px',
-              padding: '12px 16px',
-              color: '#F1F5F9',
-              fontSize: '14px',
-              outline: 'none',
-            }}
+            className="form-input"
+            style={{ height: '40px', fontSize: '13px' }}
           />
           <button
             className="btn-primary"
@@ -115,9 +100,9 @@ STATUS: ${response.verification_status}
                 handleAsk(sq);
               }}
               style={{
-                background: '#182844',
-                border: '1px solid #1E3A5F',
-                color: '#CBD5E1',
+                background: '#b2b8c2',
+                border: '1px solid #73859d',
+                color: '#232528',
                 padding: '4px 10px',
                 borderRadius: '6px',
                 fontSize: '12px',
@@ -132,19 +117,19 @@ STATUS: ${response.verification_status}
 
       {/* Official Response Paper */}
       {response && (
-        <div className="gov-card" style={{ padding: '28px', background: '#0E1726', border: '1px solid #1E3A5F' }}>
+        <div className="gov-card" style={{ padding: '28px', background: '#d2d5dc', border: '1px solid #c4cbd4' }}>
           {/* Official Letterhead */}
-          <div style={{ textAlign: 'center', paddingBottom: '16px', marginBottom: '20px', borderBottom: '2px solid #FF6500' }}>
-            <h4 style={{ fontSize: '12px', letterSpacing: '1px', color: '#94A3B8', textTransform: 'uppercase' }}>
+          <div style={{ textAlign: 'center', paddingBottom: '16px', marginBottom: '20px', borderBottom: '2px solid #24211f' }}>
+            <h4 style={{ fontSize: '12px', letterSpacing: '1px', color: '#1e1f20', textTransform: 'uppercase' }}>
               {response.parliamentary_header.ministry}
             </h4>
-            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#FFFFFF', marginTop: '4px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 800, color: '#1f1c1c', marginTop: '4px' }}>
               {response.parliamentary_header.house}
             </h3>
-            <div style={{ fontSize: '12px', color: '#FF6500', fontWeight: 600, marginTop: '4px' }}>
+            <div style={{ fontSize: '12px', color: '#211f1e', fontWeight: 600, marginTop: '4px' }}>
               {response.parliamentary_header.session} • DATE: {response.parliamentary_header.date}
             </div>
-            <div style={{ fontSize: '13px', color: '#E2E8F0', marginTop: '8px', fontWeight: 700 }}>
+            <div style={{ fontSize: '13px', color: '#2a2d30', marginTop: '8px', fontWeight: 700 }}>
               {response.parliamentary_header.subject}
             </div>
           </div>
@@ -163,13 +148,13 @@ STATUS: ${response.verification_status}
 
           {/* Official Answer Body */}
           <div style={{ 
-            background: '#0B1320', 
+            background: '#e9ecf2', 
             padding: '20px', 
             borderRadius: '8px', 
-            border: '1px solid #14243B',
+            border: '1px solid #c7d1de',
             fontSize: '14px',
             lineHeight: '1.7',
-            color: '#F1F5F9',
+            color: '#151617',
             whiteSpace: 'pre-line',
             marginBottom: '20px'
           }}>
@@ -179,7 +164,7 @@ STATUS: ${response.verification_status}
           {/* Tabular Annexure */}
           {response.annexure_data?.length > 0 && (
             <div style={{ marginBottom: '20px' }}>
-              <h4 style={{ fontSize: '13px', color: '#FF6500', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
+              <h4 style={{ fontSize: '13px', color: '#211f1e', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
                 ANNEXURE: OFFICIAL STATISTICAL SUBMISSION
               </h4>
               <div className="gov-table-wrapper">
@@ -196,8 +181,8 @@ STATUS: ${response.verification_status}
                   <tbody>
                     {response.annexure_data.map((row, idx) => (
                       <tr key={idx}>
-                        <td><strong style={{ color: '#F8FAFC' }}>{row.parameter}</strong></td>
-                        <td><span style={{ color: '#FF6500', fontWeight: 700 }}>{row.value}</span></td>
+                        <td><strong style={{ color: '#252729' }}>{row.parameter}</strong></td>
+                        <td><span style={{ color: '#34312e', fontWeight: 700 }}>{row.value}</span></td>
                         <td>{row.period}</td>
                         <td><span className="badge badge-info">{row.entity}</span></td>
                         <td><span style={{ color: '#3B82F6', fontSize: '12px' }}>{row.source_ref}</span></td>
@@ -210,7 +195,7 @@ STATUS: ${response.verification_status}
           )}
 
           {/* Footnote & Verification */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#64748B', paddingTop: '12px', borderTop: '1px solid #1E3A5F' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '12px', color: '#2f3236', paddingTop: '12px', borderTop: '1px solid #1E3A5F' }}>
             <span>Primary Grounding: "{response.primary_evidence_quote?.slice(0, 100)}..."</span>
             <span style={{ color: '#10B981', fontWeight: 600 }}>Verified by CoalIntel Intelligence Engine</span>
           </div>

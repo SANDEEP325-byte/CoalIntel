@@ -2,39 +2,44 @@ import React, { useState, useEffect } from 'react';
 import { 
   FileText, 
   Upload, 
-  Activity, 
+  Search, 
+  Filter, 
   RefreshCw, 
-  CheckCircle2, 
-  AlertTriangle, 
-  Layers, 
   Eye, 
-  Search,
-  FileCheck
+  Bot, 
+  CheckCircle2, 
+  AlertCircle, 
+  X,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
+import PageHeader from './common/PageHeader';
+import StatusBadge from './common/StatusBadge';
+import DataTable from './common/DataTable';
+import EmptyState from './common/EmptyState';
+import LoadingState from './common/LoadingState';
 import { api } from '../api';
 
-export default function Documents() {
+export default function Documents({ onAskQuestion }) {
   const [documents, setDocuments] = useState([]);
-  const [healthData, setHealthData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [selectedDocDetails, setSelectedDocDetails] = useState(null);
-  const [showHealthModal, setShowHealthModal] = useState(false);
   const [uploadMsg, setUploadMsg] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [selectedDocDetails, setSelectedDocDetails] = useState(null);
+  const [inspectLoading, setInspectLoading] = useState(false);
 
   useEffect(() => {
-    loadDocs();
+    loadDocuments();
   }, []);
 
-  async function loadDocs() {
+  async function loadDocuments() {
     setLoading(true);
     try {
-      const [docsRes, healthRes] = await Promise.all([
-        api.getDocuments(),
-        api.getDocumentsHealth()
-      ]);
-      setDocuments(docsRes.documents || []);
-      setHealthData(healthRes);
+      const res = await api.getDocuments();
+      setDocuments(res.documents || []);
     } catch (e) {
       console.error('Failed to load documents:', e);
     } finally {
@@ -50,310 +55,423 @@ export default function Documents() {
     setUploadMsg(null);
     try {
       const res = await api.uploadDocument(file);
-      setUploadMsg({ type: 'success', text: `Uploaded and indexed: ${res.filename} (${res.pages} pages, ${res.chunks_indexed} chunks)` });
-      await loadDocs();
+      setUploadMsg({
+        type: 'success',
+        text: `Successfully ingested: ${res.filename || file.name} (${res.pages || 'N/A'} pages, ${res.chunks_indexed || 'N/A'} chunks indexed).`
+      });
+      await loadDocuments();
     } catch (err) {
-      setUploadMsg({ type: 'error', text: err.message || 'Failed to upload document.' });
+      setUploadMsg({
+        type: 'error',
+        text: err.message || 'Failed to upload and index document.'
+      });
     } finally {
       setUploading(false);
+      e.target.value = '';
     }
   }
 
-  async function handleViewChunks(docId) {
+  async function handleInspect(docId) {
+    setInspectLoading(true);
     try {
       const details = await api.getDocument(docId);
       setSelectedDocDetails(details);
     } catch (e) {
-      console.error('Failed to view chunks:', e);
+      console.error('Failed to inspect document:', e);
+    } finally {
+      setInspectLoading(false);
     }
   }
 
-  async function handleTriggerReindex() {
-    try {
-      await api.triggerReindex();
-      setUploadMsg({ type: 'info', text: 'Background re-indexing started. Chunks and tables are being re-processed.' });
-      setTimeout(loadDocs, 5000);
-    } catch (e) {
-      setUploadMsg({ type: 'error', text: 'Failed to initiate re-indexing.' });
+  // Filter logic
+  const filteredDocs = documents.filter((doc) => {
+    const name = (doc.filename || doc.document_name || '').toLowerCase();
+    const cat = (doc.document_category || '').toLowerCase();
+    const status = (doc.processing_status || 'indexed').toLowerCase();
+
+    const matchesSearch = !searchQuery || name.includes(searchQuery.toLowerCase()) || cat.includes(searchQuery.toLowerCase());
+    const matchesCat = !categoryFilter || cat === categoryFilter.toLowerCase();
+    const matchesStatus = !statusFilter || status.includes(statusFilter.toLowerCase());
+
+    return matchesSearch && matchesCat && matchesStatus;
+  });
+
+  const categories = Array.from(new Set(documents.map(d => d.document_category).filter(Boolean)));
+
+  const columns = [
+    {
+      header: 'Document Name',
+      accessor: 'filename',
+      render: (row) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <FileText size={15} color="var(--accent-green)" />
+          <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+            {row.filename || row.document_name}
+          </span>
+        </div>
+      )
+    },
+    {
+      header: 'Category',
+      accessor: 'document_category',
+      render: (row) => (
+        <span className="badge badge-neutral">
+          {row.document_category || 'Statutory'}
+        </span>
+      )
+    },
+    {
+      header: 'Pages',
+      accessor: 'page_count',
+      align: 'right',
+      render: (row) => row.page_count ?? '—'
+    },
+    {
+      header: 'Chunks',
+      accessor: 'chunks_count',
+      align: 'right',
+      render: (row) => row.chunks_count ?? '—'
+    },
+    {
+      header: 'Status',
+      accessor: 'processing_status',
+      render: (row) => <StatusBadge status={row.processing_status || 'Indexed'} />
+    },
+    {
+      header: 'Uploaded At',
+      accessor: 'uploaded_at',
+      render: (row) => {
+        if (!row.uploaded_at) return 'Statutory Pre-load';
+        try {
+          return new Date(row.uploaded_at).toLocaleDateString('en-IN', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric'
+          });
+        } catch {
+          return row.uploaded_at;
+        }
+      }
+    },
+    {
+      header: 'Actions',
+      accessor: 'id',
+      align: 'right',
+      render: (row) => (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+          <button
+            onClick={() => handleInspect(row.id)}
+            className="btn-secondary"
+            style={{ padding: '3px 8px', fontSize: '11.5px' }}
+            title="Inspect metadata and extracted chunks"
+          >
+            <Eye size={13} />
+            <span>Inspect</span>
+          </button>
+          <button
+            onClick={() => onAskQuestion(`Summarize key findings from ${row.filename}`)}
+            className="btn-subtle"
+            style={{ padding: '3px 8px', fontSize: '11.5px' }}
+            title="Ask question on this document"
+          >
+            <Bot size={13} />
+            <span>Query</span>
+          </button>
+        </div>
+      )
     }
-  }
+  ];
 
   return (
     <div>
-      {/* Top Banner */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <FileText size={22} color="#FF6500" />
-            <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF' }}>
-              Document Ingestion & Knowledge Management
-            </h2>
-            <span className="badge badge-success">{documents.length} Indexed Reports</span>
-          </div>
-          <p style={{ color: '#94A3B8', fontSize: '13px' }}>
-            Multi-document repository with PyMuPDF page-aware extraction, table parsing, and batch embedding indexing.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '10px' }}>
+      <PageHeader
+        title="Documents"
+        actions={
           <button 
-            className="btn-secondary"
-            onClick={() => setShowHealthModal(true)}
+            className="btn-secondary" 
+            onClick={loadDocuments}
+            disabled={loading}
           >
-            <Activity size={16} color="#10B981" />
-            Document Health ({healthData?.system_health_score || 95}/100)
+            <RefreshCw size={13} />
+            <span>Refresh</span>
           </button>
+        }
+      />
 
-          <button 
-            className="btn-secondary"
-            onClick={handleTriggerReindex}
-            title="Re-run fast batch indexing for all PDFs in data folder"
-          >
-            <RefreshCw size={16} />
-            Re-Index All
-          </button>
-        </div>
-      </div>
-
-      {/* Upload Notification Message */}
+      {/* Upload Feedback */}
       {uploadMsg && (
-        <div style={{ 
-          padding: '12px 16px', 
-          borderRadius: '8px', 
-          marginBottom: '20px',
-          background: uploadMsg.type === 'success' ? 'var(--success-bg)' : uploadMsg.type === 'error' ? 'var(--danger-bg)' : 'var(--info-bg)',
-          color: uploadMsg.type === 'success' ? 'var(--success)' : uploadMsg.type === 'error' ? 'var(--danger)' : 'var(--info)',
-          border: '1px solid currentColor',
-          fontSize: '13px'
+        <div style={{
+          padding: '10px 14px',
+          borderRadius: 'var(--radius-sm)',
+          marginBottom: '16px',
+          fontSize: '13px',
+          backgroundColor: uploadMsg.type === 'success' ? 'var(--color-success-bg)' : 'var(--color-danger-bg)',
+          color: uploadMsg.type === 'success' ? 'var(--color-success)' : 'var(--color-danger)',
+          border: `1px solid ${uploadMsg.type === 'success' ? 'var(--color-success-border)' : 'var(--color-danger-border)'}`
         }}>
           {uploadMsg.text}
         </div>
       )}
 
-      {/* Upload Drop Area */}
-      <div className="gov-card" style={{ marginBottom: '24px', textAlign: 'center', borderStyle: 'dashed', padding: '24px' }}>
-        <input 
-          type="file" 
-          id="doc-upload" 
-          accept=".pdf,.docx,.txt" 
-          onChange={handleFileUpload}
-          style={{ display: 'none' }}
-        />
-        <label htmlFor="doc-upload" style={{ cursor: 'pointer', display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-          <div style={{ 
-            width: '48px', 
-            height: '48px', 
-            borderRadius: '50%', 
-            background: 'rgba(255, 101, 0, 0.1)', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center' 
-          }}>
-            <Upload size={24} color="#FF6500" />
-          </div>
+      {/* Practical Upload Area (Clean, Non-Flashy Enterprise) */}
+      <div className="gov-card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
           <div>
-            <span style={{ color: '#F1F5F9', fontWeight: 600, fontSize: '14px' }}>
-              {uploading ? 'Processing & Embedding Document...' : 'Click to Upload Mining Report (PDF, DOCX)'}
-            </span>
-            <div style={{ color: '#64748B', fontSize: '12px', marginTop: '4px' }}>
-              Automatic page segmentation, table detection, and sentence-transformers indexing
-            </div>
+            <h3 style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+              Ingest Statutory Report (PDF)
+            </h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+              Upload an operational, geological, or financial filing to extract text and generate 384-D vector chunks.
+            </p>
           </div>
-        </label>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <label 
+              htmlFor="doc-upload" 
+              className="btn-primary"
+              style={{ cursor: uploading ? 'wait' : 'pointer' }}
+            >
+              <Upload size={14} />
+              <span>{uploading ? 'Processing & Ingesting...' : 'Select PDF File'}</span>
+            </label>
+            <input 
+              id="doc-upload" 
+              type="file" 
+              accept=".pdf" 
+              style={{ display: 'none' }} 
+              onChange={handleFileUpload}
+              disabled={uploading}
+            />
+          </div>
+        </div>
       </div>
 
-      {/* Document List Table */}
-      <div className="gov-card">
-        <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9', marginBottom: '16px' }}>
-          Indexed Mining Reports Repository
-        </h3>
+      {/* Search & Filter Bar */}
+      <div className="gov-card" style={{ marginBottom: '16px', padding: '12px 16px' }}>
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
+          {/* Text Search */}
+          <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+            <Search size={14} style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <input
+              type="text"
+              placeholder="Filter by document name or keyword..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="form-input"
+              style={{ paddingLeft: '32px', height: '34px', fontSize: '12.5px' }}
+            />
+          </div>
 
-        <div className="gov-table-wrapper">
-          <table className="gov-table">
-            <thead>
-              <tr>
-                <th>Document Name</th>
-                <th>Category</th>
-                <th>Pages</th>
-                <th>Tables Detected</th>
-                <th>Characters</th>
-                <th>Chunks</th>
-                <th>Status</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {documents.map((doc) => (
-                <tr key={doc.document_id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <FileText size={16} color="#3B82F6" />
-                      <strong style={{ color: '#F8FAFC' }}>{doc.filename}</strong>
-                    </div>
-                  </td>
-                  <td>
-                    <span className="badge badge-orange">{doc.document_category}</span>
-                  </td>
-                  <td><strong>{doc.page_count}</strong></td>
-                  <td>
-                    <span style={{ color: '#10B981', fontWeight: 600 }}>{doc.tables_detected}</span>
-                  </td>
-                  <td>{doc.characters_extracted?.toLocaleString()}</td>
-                  <td>
-                    <span className="badge badge-info">{doc.chunks_count} chunks</span>
-                  </td>
-                  <td>
-                    <span className="badge badge-success">
-                      <CheckCircle2 size={12} /> {doc.processing_status}
-                    </span>
-                  </td>
-                  <td>
-                    <button 
-                      className="btn-secondary"
-                      onClick={() => handleViewChunks(doc.document_id)}
-                      style={{ padding: '4px 10px', fontSize: '12px' }}
-                    >
-                      <Eye size={13} /> View Chunks
-                    </button>
-                  </td>
-                </tr>
+          {/* Category Filter */}
+          <div style={{ width: '180px' }}>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="form-select"
+              style={{ height: '34px', fontSize: '12.5px' }}
+            >
+              <option value="">All Categories</option>
+              {categories.map((c) => (
+                <option key={c} value={c}>{c}</option>
               ))}
-            </tbody>
-          </table>
+            </select>
+          </div>
+
+          {/* Status Filter */}
+          <div style={{ width: '160px' }}>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="form-select"
+              style={{ height: '34px', fontSize: '12.5px' }}
+            >
+              <option value="">All Statuses</option>
+              <option value="indexed">Indexed</option>
+              <option value="processed">Processed</option>
+              <option value="upload">Uploaded</option>
+              <option value="extract">Extracting</option>
+              <option value="chunk">Chunking</option>
+              <option value="embed">Embedding</option>
+              <option value="fail">Failed</option>
+            </select>
+          </div>
+
+          {(searchQuery || categoryFilter || statusFilter) && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setCategoryFilter('');
+                setStatusFilter('');
+              }}
+              className="btn-subtle"
+              style={{ fontSize: '12px' }}
+            >
+              Clear Filters
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Document Health Modal */}
-      {showHealthModal && healthData && (
-        <div style={{
-          position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '20px'
-        }}>
-          <div className="gov-card" style={{ maxWidth: '800px', width: '100%', maxHeight: '85vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Activity size={22} color="#10B981" />
-                <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#FFFFFF' }}>
-                  Document Health & Ingestion Diagnostics (Feature 13)
-                </h3>
-              </div>
-              <button 
-                onClick={() => setShowHealthModal(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: '20px', cursor: 'pointer' }}
-              >✕</button>
-            </div>
+      {/* Document Table */}
+      <div className="gov-card">
+        {loading ? (
+          <LoadingState message="Loading documents from repository..." />
+        ) : filteredDocs.length === 0 ? (
+          <EmptyState
+            title="No documents match criteria"
+            message="Try clearing your search query or filters to view all statutory filings."
+            actionLabel="Reset Filters"
+            onAction={() => {
+              setSearchQuery('');
+              setCategoryFilter('');
+              setStatusFilter('');
+            }}
+          />
+        ) : (
+          <DataTable
+            columns={columns}
+            data={filteredDocs}
+            keyField="id"
+          />
+        )}
+      </div>
 
-            {/* Health Score Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
-              <div style={{ background: '#0B1320', padding: '12px', borderRadius: '6px' }}>
-                <span style={{ color: '#64748B', fontSize: '11px' }}>System Health Score</span>
-                <div style={{ fontSize: '22px', fontWeight: 800, color: '#10B981' }}>{healthData.system_health_score}/100</div>
-              </div>
-              <div style={{ background: '#0B1320', padding: '12px', borderRadius: '6px' }}>
-                <span style={{ color: '#64748B', fontSize: '11px' }}>Total Pages</span>
-                <div style={{ fontSize: '22px', fontWeight: 800, color: '#F1F5F9' }}>{healthData.total_pages}</div>
-              </div>
-              <div style={{ background: '#0B1320', padding: '12px', borderRadius: '6px' }}>
-                <span style={{ color: '#64748B', fontSize: '11px' }}>Tables Indexed</span>
-                <div style={{ fontSize: '22px', fontWeight: 800, color: '#3B82F6' }}>{healthData.total_tables_indexed}</div>
-              </div>
-              <div style={{ background: '#0B1320', padding: '12px', borderRadius: '6px' }}>
-                <span style={{ color: '#64748B', fontSize: '11px' }}>Vectorized Chunks</span>
-                <div style={{ fontSize: '22px', fontWeight: 800, color: '#FF6500' }}>{healthData.total_chunks_indexed}</div>
-              </div>
-            </div>
-
-            {/* Health Per Document */}
-            <div className="gov-table-wrapper">
-              <table className="gov-table">
-                <thead>
-                  <tr>
-                    <th>Document</th>
-                    <th>Pages</th>
-                    <th>Text Status</th>
-                    <th>OCR Status</th>
-                    <th>Empty Pages</th>
-                    <th>Score</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {healthData.documents?.map((d) => (
-                    <tr key={d.document_id}>
-                      <td><strong style={{ color: '#F1F5F9', fontSize: '12px' }}>{d.filename}</strong></td>
-                      <td>{d.pages}</td>
-                      <td><span className="badge badge-success">{d.text_extraction_status}</span></td>
-                      <td><span className="badge badge-info">{d.ocr_status}</span></td>
-                      <td>{d.empty_pages_count > 0 ? `${d.empty_pages_count} (p. ${d.empty_pages.join(',')})` : '0'}</td>
-                      <td><strong style={{ color: '#10B981' }}>{d.health_score}%</strong></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ marginTop: '20px', textAlign: 'right' }}>
-              <button className="btn-secondary" onClick={() => setShowHealthModal(false)}>Close Diagnostics</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Chunk Viewer Modal */}
+      {/* Document Details Drawer / Modal */}
       {selectedDocDetails && (
         <div style={{
           position: 'fixed',
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.8)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          zIndex: 1000, padding: '20px'
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.45)',
+          display: 'flex',
+          justifyContent: 'flex-end',
+          zIndex: 100
         }}>
-          <div className="gov-card" style={{ maxWidth: '900px', width: '100%', maxHeight: '85vh', overflowY: 'auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div style={{
+            width: '640px',
+            maxWidth: '100%',
+            backgroundColor: 'var(--bg-surface)',
+            height: '100%',
+            overflowY: 'auto',
+            boxShadow: 'var(--shadow-md)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}>
+            {/* Drawer Header */}
+            <div style={{
+              padding: '16px 20px',
+              borderBottom: '1px solid var(--border-color)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              backgroundColor: 'var(--bg-subtle)'
+            }}>
               <div>
-                <h3 style={{ fontSize: '18px', fontWeight: 800, color: '#FFFFFF' }}>
-                  Page-Aware Chunks: {selectedDocDetails.filename}
-                </h3>
-                <span style={{ fontSize: '12px', color: '#94A3B8' }}>
-                  Showing sample of indexed chunks with verified page numbers & table formatting
+                <span className="badge badge-green" style={{ marginBottom: '4px' }}>
+                  Document Inspector
                 </span>
+                <h3 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>
+                  {selectedDocDetails.filename || selectedDocDetails.document_name}
+                </h3>
               </div>
-              <button 
+              <button
                 onClick={() => setSelectedDocDetails(null)}
-                style={{ background: 'transparent', border: 'none', color: '#94A3B8', fontSize: '20px', cursor: 'pointer' }}
-              >✕</button>
+                className="btn-subtle"
+                style={{ padding: '6px' }}
+              >
+                <X size={18} />
+              </button>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              {selectedDocDetails.chunks_sample?.map((chk) => (
-                <div key={chk.chunk_index} style={{ background: '#0B1320', border: '1px solid #1E3A5F', borderRadius: '6px', padding: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', fontSize: '12px' }}>
-                    <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                      <span className="badge badge-orange">Chunk #{chk.chunk_index}</span>
-                      <span className="badge badge-info">Page {chk.page_number}</span>
-                      {chk.is_table && <span className="badge badge-success">STRUCTURED TABLE</span>}
-                    </div>
-                  </div>
-                  <pre style={{ 
-                    color: '#CBD5E1', 
-                    fontSize: '12px', 
-                    fontFamily: 'monospace', 
-                    whiteSpace: 'pre-wrap', 
-                    background: '#070C15', 
-                    padding: '10px', 
-                    borderRadius: '4px',
-                    margin: 0 
-                  }}>
-                    {chk.text}
-                  </pre>
+            {/* Drawer Content */}
+            <div style={{ padding: '20px', flex: 1, overflowY: 'auto' }}>
+              {/* Metadata Summary */}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '12px',
+                marginBottom: '20px',
+                padding: '12px',
+                backgroundColor: 'var(--bg-subtle)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-sm)'
+              }}>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Category</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600 }}>{selectedDocDetails.document_category || 'Statutory'}</div>
                 </div>
-              ))}
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Status</div>
+                  <StatusBadge status={selectedDocDetails.processing_status || 'Indexed'} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Total Pages</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600 }}>{selectedDocDetails.page_count || '—'}</div>
+                </div>
+                <div>
+                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Indexed Chunks</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600 }}>{selectedDocDetails.chunks_count || selectedDocDetails.chunks?.length || '—'}</div>
+                </div>
+              </div>
+
+              {/* Chunks List */}
+              <div>
+                <h4 style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '10px' }}>
+                  Extracted Chunks & Page Alignment ({selectedDocDetails.chunks?.length || 0})
+                </h4>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {(selectedDocDetails.chunks || []).map((chk, i) => (
+                    <div
+                      key={chk.chunk_id || i}
+                      style={{
+                        padding: '10px 12px',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-sm)',
+                        backgroundColor: 'var(--bg-surface)',
+                        fontSize: '12.5px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '11px', color: 'var(--text-muted)' }}>
+                        <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>
+                          Chunk #{i + 1} {chk.chunk_id ? `(${chk.chunk_id})` : ''}
+                        </span>
+                        <span>Page {chk.page_number ?? 'N/A'}</span>
+                      </div>
+                      <div style={{ color: 'var(--text-secondary)', lineHeight: 1.5, maxHeight: '80px', overflow: 'hidden' }}>
+                        {chk.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            <div style={{ marginTop: '16px', textAlign: 'right' }}>
-              <button className="btn-secondary" onClick={() => setSelectedDocDetails(null)}>Close Chunks</button>
+            {/* Drawer Footer */}
+            <div style={{
+              padding: '14px 20px',
+              borderTop: '1px solid var(--border-color)',
+              backgroundColor: 'var(--bg-subtle)',
+              display: 'flex',
+              justifyContent: 'space-between'
+            }}>
+              <button
+                onClick={() => {
+                  onAskQuestion(`Summarize key operational findings from ${selectedDocDetails.filename}`);
+                  setSelectedDocDetails(null);
+                }}
+                className="btn-primary"
+              >
+                <Bot size={14} /> Query with AI Assistant
+              </button>
+              <button
+                onClick={() => setSelectedDocDetails(null)}
+                className="btn-secondary"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

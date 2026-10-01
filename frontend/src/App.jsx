@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import './App.css';
-import Navbar from './components/Navbar';
+import AppShell from './components/common/AppShell';
 import Dashboard from './components/Dashboard';
 import Documents from './components/Documents';
 import AIAssistant from './components/AIAssistant';
 import Analytics from './components/Analytics';
 import Reports from './components/Reports';
+import DecisionBrief from './components/DecisionBrief';
+import Settings from './components/Settings';
+import GlobalSearch from './components/GlobalSearch';
+import DemoMode from './components/DemoMode';
 import Comparisons from './components/Comparisons';
 import DataValidation from './components/DataValidation';
-import Topics from './components/Topics';
 import Sources from './components/Sources';
 import Parliamentary from './components/Parliamentary';
 import { api } from './api';
@@ -20,6 +23,16 @@ function App() {
 
   useEffect(() => {
     fetchHealth();
+
+    // Global shortcut Ctrl+K to open search
+    function handleKeyDown(e) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setActiveTab('search');
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   async function fetchHealth() {
@@ -31,73 +44,97 @@ function App() {
       setHealthData({
         status: 'warning',
         database_connected: false,
-        indexed_chunks: 1504,
-        llm_model: 'qwen3:1.7b',
-        embedding_model: 'sentence-transformers/all-MiniLM-L6-v2'
+        indexed_chunks: 1518,
+        llm_model: 'gemini-3.6-flash',
+        embedding_model: 'sentence-transformers/all-MiniLM-L6-v2',
+        ai_provider: 'gemini'
       });
     }
   }
 
-  function handleAskFromDashboard(queryText) {
+  function handleAskFromAnywhere(queryText) {
     setInitialQuestion(queryText);
     setActiveTab('assistant');
   }
 
   return (
-    <div className="app-container">
-      <Navbar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
-        healthData={healthData} 
-        onRefresh={fetchHealth} 
-      />
+    <AppShell
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      healthData={healthData}
+    >
+      {/* 7 Primary Views */}
+      {activeTab === 'dashboard' && (
+        <Dashboard 
+          setActiveTab={setActiveTab} 
+          onAskQuestion={handleAskFromAnywhere} 
+        />
+      )}
 
-      <main className="main-content">
-        {activeTab === 'dashboard' && (
-          <Dashboard 
-            setActiveTab={setActiveTab} 
-            onAskQuestion={handleAskFromDashboard} 
-          />
-        )}
-        {activeTab === 'documents' && <Documents />}
-        {activeTab === 'assistant' && (
-          <AIAssistant 
-            initialQuestion={initialQuestion} 
-            onSwitchTab={setActiveTab} 
-          />
-        )}
-        {activeTab === 'analytics' && (
-          <Analytics 
-            onSelectLineage={(metricId) => setActiveTab('sources')} 
-          />
-        )}
-        {activeTab === 'reports' && <Reports />}
-        {activeTab === 'comparisons' && <Comparisons />}
-        {activeTab === 'validation' && <DataValidation />}
-        {activeTab === 'topics' && <Topics />}
-        {activeTab === 'sources' && <Sources />}
-        {activeTab === 'parliamentary' && <Parliamentary />}
-      </main>
+      {activeTab === 'documents' && (
+        <Documents 
+          onAskQuestion={handleAskFromAnywhere} 
+        />
+      )}
 
-      <footer style={{
-        background: '#070C15',
-        borderTop: '1px solid #1E3A5F',
-        padding: '16px 32px',
-        textAlign: 'center',
-        fontSize: '12px',
-        color: '#64748B',
-        marginTop: 'auto'
-      }}>
-        <div style={{ maxWidth: '1440px', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-          <div>
-            <strong style={{ color: '#94A3B8' }}>CoalIntel Decision Intelligence Platform</strong> — Smart India Hackathon 2026 (SIH26023)
-          </div>
-          <div>
-            Ministry of Coal • CMPDI / CIL Reporting Solution • 100% Local RAG with Ollama Qwen3:1.7B & All-MiniLM-L6-v2
-          </div>
-        </div>
-      </footer>
-    </div>
+      {activeTab === 'assistant' && (
+        <AIAssistant 
+          initialQuestion={initialQuestion} 
+          onSwitchTab={setActiveTab} 
+        />
+      )}
+
+      {activeTab === 'analytics' && (
+        <Analytics 
+          onSelectLineage={() => setActiveTab('sources')} 
+          onAskQuestion={handleAskFromAnywhere} 
+        />
+      )}
+
+      {activeTab === 'reports' && (
+        <Reports />
+      )}
+
+      {activeTab === 'decision_brief' && (
+        <DecisionBrief 
+          onSwitchToCopilot={handleAskFromAnywhere} 
+        />
+      )}
+
+      {activeTab === 'settings' && (
+        <Settings />
+      )}
+
+      {/* Specialized Operations */}
+      {activeTab === 'search' && (
+        <GlobalSearch 
+          onSelectResult={(res) => handleAskFromAnywhere(`What does the report say about ${res.text?.slice(0, 80)}?`)} 
+        />
+      )}
+
+      {activeTab === 'comparisons' && (
+        <Comparisons />
+      )}
+
+      {activeTab === 'validation' && (
+        <DataValidation />
+      )}
+
+      {activeTab === 'sources' && (
+        <Sources />
+      )}
+
+      {activeTab === 'parliamentary' && (
+        <Parliamentary />
+      )}
+
+      {activeTab === 'demo_mode' && (
+        <DemoMode 
+          onNavigateTab={setActiveTab} 
+          onAskQuestion={handleAskFromAnywhere} 
+        />
+      )}
+    </AppShell>
   );
 }
 

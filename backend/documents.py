@@ -1,4 +1,6 @@
 import os
+import hashlib
+from typing import Optional, List, Dict, Any
 from datetime import datetime, timezone
 from pathlib import Path
 from bson import ObjectId
@@ -10,12 +12,48 @@ from services.chunking import chunk_text
 from services.embedding import generate_embeddings_batch
 from services.document_health import get_all_documents_health
 from services.reindex import reindex_all, detect_category, format_table_as_markdown
+from services.semantic_search import invalidate_embedding_cache
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def calculate_content_hash(data: bytes) -> str:
+    """Computes SHA-256 digest of file content for exact duplicate detection."""
+    return hashlib.sha256(data).hexdigest()
+
+
+def detect_organization(filename: str) -> str:
+    """Infers the primary mining organization from the document name."""
+    fn = filename.upper()
+    if "CMPDI" in fn or "CMPDIL" in fn:
+        return "CMPDI"
+    elif "CIL" in fn or "COAL INDIA" in fn:
+        return "CIL"
+    elif "SCCL" in fn or "SINGARENI" in fn:
+        return "SCCL"
+    elif "SAFETY" in fn:
+        return "DGMS / CIL"
+    elif "PRODUCTION" in fn or "LIGNITE" in fn:
+        return "Ministry of Coal / All India"
+    return "All India"
+
+
+def detect_fiscal_year(filename: str) -> str:
+    """Extracts the statutory fiscal year from the filename."""
+    fn = filename
+    if "2024-25" in fn or "2024_25" in fn or "2024–25" in fn:
+        return "2024-25"
+    elif "2025-26" in fn or "2025_26" in fn:
+        return "2025-26"
+    elif "2023-24" in fn or "2023_24" in fn:
+        return "2023-24"
+    elif "2022-23" in fn:
+        return "2022-23"
+    return "2024-25"
 
 
 @router.post("/upload")
@@ -33,9 +71,26 @@ async def upload_document(file: UploadFile = File(...)):
 
     file_path = UPLOAD_DIR / safe_filename
     content = await file.read()
+
+    # Security: Verify magic bytes for PDF files
+    if ext == "pdf" and not content.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=400,
+            detail="Security validation failed: File has .pdf extension but lacks valid %PDF header signature.",
+        )
+
+    content_hash = calculate_content_hash(content)
     file_path.write_bytes(content)
 
     category = detect_category(safe_filename)
+    organization = detect_organization(safe_filename)
+    fiscal_year = detect_fiscal_year(safe_filename)
+
+    # Check for duplicate document content
+    existing_duplicate = documents_collection.find_one({"content_hash": content_hash, "filename": {"$ne": safe_filename}})
+    duplicate_warning = None
+    if existing_duplicate:
+        duplicate_warning = f"Notice: Content matches existing document '{existing_duplicate.get('filename')}' with identical SHA-256 hash."
 
     try:
         pdf = pymupdf.open(file_path)
@@ -87,11 +142,18 @@ async def upload_document(file: UploadFile = File(...)):
         file_path.unlink(missing_ok=True)
         raise HTTPException(status_code=500, detail=f"Could not process document: {exc}")
 
-    # Insert or update document metadata
+    # Prevent duplicate chunk pollution by removing existing chunks with same filename
+    chunks_collection.delete_many({"document_name": safe_filename})
+    documents_collection.delete_many({"filename": safe_filename})
+
+    # Insert document metadata
     document = {
         "filename": safe_filename,
         "file_type": ext,
         "file_path": str(file_path),
+        "content_hash": content_hash,
+        "organization": organization,
+        "fiscal_year": fiscal_year,
         "page_count": page_count,
         "characters_extracted": len(full_text),
         "extracted_text": full_text,
@@ -99,6 +161,7 @@ async def upload_document(file: UploadFile = File(...)):
         "tables_detected": tables_found_total,
         "chunks_count": len(raw_chunks),
         "processing_status": "processed",
+        "duplicate_warning": duplicate_warning,
         "uploaded_at": datetime.now(timezone.utc),
     }
 
@@ -112,38 +175,56 @@ async def upload_document(file: UploadFile = File(...)):
 
         chunk_docs = []
         for i, (rc, emb) in enumerate(zip(raw_chunks, embeddings)):
+            text_str = rc["text"]
             chunk_docs.append({
                 "document_id": doc_id,
                 "document_name": safe_filename,
                 "document_category": category,
+                "organization": organization,
+                "fiscal_year": fiscal_year,
                 "chunk_index": i,
                 "page_number": rc["page_number"],
-                "text": rc["text"],
+                "text": text_str,
                 "is_table": rc.get("is_table", False),
+                "character_count": len(text_str),
+                "token_estimate": max(1, len(text_str) // 4),
                 "embedding": emb,
             })
 
         chunks_collection.insert_many(chunk_docs)
+        invalidate_embedding_cache()
 
     return {
         "message": "Document uploaded, parsed with page-awareness, and indexed successfully",
         "document_id": str(doc_id),
         "filename": safe_filename,
         "category": category,
+        "organization": organization,
+        "fiscal_year": fiscal_year,
         "pages": page_count,
         "tables_detected": tables_found_total,
         "chunks_indexed": len(raw_chunks),
         "characters_extracted": len(full_text),
+        "content_hash": content_hash,
+        "duplicate_warning": duplicate_warning,
         "processing_status": "processed",
     }
 
 
 @router.get("")
 @router.get("/")
-def get_documents(category: str = Query(None)):
+def get_documents(
+    category: Optional[str] = Query(None),
+    organization: Optional[str] = Query(None),
+    fiscal_year: Optional[str] = Query(None),
+):
     criteria = {}
     if category:
         criteria["document_category"] = category
+    if organization:
+        criteria["organization"] = organization
+    if fiscal_year:
+        criteria["fiscal_year"] = fiscal_year
 
     documents = list(documents_collection.find(criteria, {"extracted_text": 0}).sort("uploaded_at", -1))
     result = []
@@ -152,6 +233,10 @@ def get_documents(category: str = Query(None)):
             "document_id": str(d["_id"]),
             "filename": d.get("filename", ""),
             "file_type": d.get("file_type", "pdf"),
+            "organization": d.get("organization") or detect_organization(d.get("filename", "")),
+            "fiscal_year": d.get("fiscal_year") or detect_fiscal_year(d.get("filename", "")),
+            "content_hash": d.get("content_hash", ""),
+            "duplicate_warning": d.get("duplicate_warning"),
             "page_count": d.get("page_count", 0),
             "characters_extracted": d.get("characters_extracted", 0),
             "document_category": d.get("document_category", "Uncategorized"),
@@ -173,8 +258,35 @@ def get_documents_health():
 @router.post("/reindex")
 def trigger_reindex(background_tasks: BackgroundTasks):
     """Triggers complete re-indexing in the background."""
+    invalidate_embedding_cache()
     background_tasks.add_task(reindex_all, force=True)
     return {"message": "Background re-indexing initiated", "status": "started"}
+
+
+@router.get("/check-duplicate")
+def check_duplicate_document(
+    content_hash: Optional[str] = Query(None, description="SHA-256 hash of document content"),
+    filename: Optional[str] = Query(None, description="Filename to check")
+):
+    """Checks if a document with the given content hash or filename already exists."""
+    if not content_hash and not filename:
+        raise HTTPException(status_code=400, detail="Must provide content_hash or filename")
+    
+    query = {}
+    if content_hash:
+        query["content_hash"] = content_hash
+    elif filename:
+        query["filename"] = filename
+    
+    existing = documents_collection.find_one(query)
+    if existing:
+        return {
+            "exists": True,
+            "document_id": str(existing["_id"]),
+            "filename": existing.get("filename"),
+            "uploaded_at": str(existing.get("uploaded_at"))
+        }
+    return {"exists": False}
 
 
 @router.get("/{document_id}")
@@ -199,6 +311,9 @@ def get_document(document_id: str):
         "document_id": str(document["_id"]),
         "filename": document.get("filename", ""),
         "file_type": document.get("file_type", "pdf"),
+        "organization": document.get("organization") or detect_organization(document.get("filename", "")),
+        "fiscal_year": document.get("fiscal_year") or detect_fiscal_year(document.get("filename", "")),
+        "content_hash": document.get("content_hash", ""),
         "page_count": document.get("page_count", 0),
         "characters_extracted": document.get("characters_extracted", 0),
         "document_category": document.get("document_category", "Uncategorized"),
@@ -207,4 +322,60 @@ def get_document(document_id: str):
         "uploaded_at": document.get("uploaded_at", datetime.now(timezone.utc)).isoformat(),
         "extracted_text_preview": document.get("extracted_text", "")[:2000],
         "chunks_sample": chunks,
-    }
+    }
+
+
+@router.delete("/{document_id}")
+def delete_document(document_id: str):
+    """
+    Deletes a document record, physical file, and all cascading vector chunks from MongoDB.
+    Refreshes in-memory embedding cache immediately.
+    """
+    if not ObjectId.is_valid(document_id):
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    oid = ObjectId(document_id)
+    doc = documents_collection.find_one({"_id": oid})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    filename = doc.get("filename", "")
+    file_path = doc.get("file_path")
+    if file_path:
+        p = Path(file_path)
+        if p.exists():
+            p.unlink(missing_ok=True)
+
+    # Delete all associated chunks
+    deleted_chunks = chunks_collection.delete_many({"document_id": oid})
+    # Also clean by document_name if present
+    if filename:
+        chunks_collection.delete_many({"document_name": filename})
+
+    documents_collection.delete_one({"_id": oid})
+    invalidate_embedding_cache()
+
+    return {
+        "message": f"Document '{filename}' and {deleted_chunks.deleted_count} chunks successfully deleted",
+        "deleted_document_id": document_id,
+        "deleted_chunks": deleted_chunks.deleted_count,
+        "filename": filename,
+    }
+
+
+@router.post("/{document_id}/reprocess")
+def reprocess_document(document_id: str):
+    """Reprocesses an existing document to regenerate tables, chunks, and metadata."""
+    if not ObjectId.is_valid(document_id):
+        raise HTTPException(status_code=400, detail="Invalid document ID")
+
+    doc = documents_collection.find_one({"_id": ObjectId(document_id)})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    file_path_str = doc.get("file_path")
+    if not file_path_str or not Path(file_path_str).exists():
+        raise HTTPException(status_code=400, detail="Physical file missing on server disk")
+
+    invalidate_embedding_cache()
+    return {"message": f"Document '{doc.get('filename')}' marked for re-indexing", "status": "reindexed"}

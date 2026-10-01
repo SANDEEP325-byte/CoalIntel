@@ -28,20 +28,36 @@ def detect_category(filename: str) -> str:
 
 
 def format_table_as_markdown(table) -> str:
-    """Converts a PyMuPDF extracted table into a clean markdown table string."""
+    """Converts a PyMuPDF extracted table into a clean, valid markdown table string."""
     try:
         data = table.extract()
         if not data or len(data) < 2:
             return ""
 
-        headers = [str(col).strip() if col is not None else "" for col in data[0]]
+        raw_headers = data[0]
+        col_count = len(raw_headers)
+        if col_count == 0:
+            return ""
+
+        headers = [
+            str(col).replace("\n", " ").replace("|", "/").strip() if col is not None and str(col).strip() != "" else f"Column_{i+1}"
+            for i, col in enumerate(raw_headers)
+        ]
         header_row = "| " + " | ".join(headers) + " |"
-        separator_row = "| " + " | ".join(["---"] * len(headers)) + " |"
+        separator_row = "| " + " | ".join(["---"] * col_count) + " |"
 
         body_rows = []
         for row in data[1:]:
-            clean_row = [str(col).replace("\n", " ").strip() if col is not None else "" for col in row]
-            body_rows.append("| " + " | ".join(clean_row) + " |")
+            clean_cells = []
+            for i in range(col_count):
+                cell_val = row[i] if i < len(row) else ""
+                clean_str = str(cell_val).replace("\n", " ").replace("|", "/").strip() if cell_val is not None else ""
+                clean_cells.append(clean_str)
+            if any(c for c in clean_cells):
+                body_rows.append("| " + " | ".join(clean_cells) + " |")
+
+        if not body_rows:
+            return ""
 
         return "\n".join([header_row, separator_row] + body_rows)
     except Exception:
@@ -151,15 +167,23 @@ def reindex_all(force: bool = True):
 
         # 4. Prepare chunk documents
         chunk_documents = []
+        org = "CMPDI" if "CMPDI" in pdf_path.name.upper() else ("CIL" if "CIL" in pdf_path.name.upper() else ("DGMS / CIL" if "SAFETY" in pdf_path.name.upper() else "Ministry of Coal / All India"))
+        f_yr = "2025-26" if "2025-26" in pdf_path.name else "2024-25"
+
         for i, (rc, emb) in enumerate(zip(raw_chunks, embeddings)):
+            text_str = rc["text"]
             chunk_documents.append({
                 "document_id": doc_id,
                 "document_name": pdf_path.name,
                 "document_category": category,
+                "organization": org,
+                "fiscal_year": f_yr,
                 "chunk_index": i,
                 "page_number": rc["page_number"],
-                "text": rc["text"],
+                "text": text_str,
                 "is_table": rc.get("is_table", False),
+                "character_count": len(text_str),
+                "token_estimate": max(1, len(text_str) // 4),
                 "embedding": emb,
             })
 
@@ -172,6 +196,8 @@ def reindex_all(force: bool = True):
             {"_id": doc_id},
             {
                 "$set": {
+                    "organization": org,
+                    "fiscal_year": f_yr,
                     "page_count": page_count,
                     "characters_extracted": len(full_extracted_text),
                     "extracted_text": full_extracted_text,

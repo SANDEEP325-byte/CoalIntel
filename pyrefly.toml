@@ -4,4 +4,6 @@ project-includes = [
 python-interpreter-path = "C:\\Users\\snepp\\SIH_project\\CoalIntel\\.venv\\Scripts\\python.exe"
 search-path = [
     "backend",
+    ".",
 ]
+

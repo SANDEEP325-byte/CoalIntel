@@ -11,6 +11,9 @@ import {
 } from 'lucide-react';
 import { api } from '../api';
 
+import PageHeader from './common/PageHeader';
+import LoadingState from './common/LoadingState';
+
 export default function Comparisons() {
   const [cilCmpdiData, setCilCmpdiData] = useState(null);
   const [diffData, setDiffData] = useState(null);
@@ -39,21 +42,12 @@ export default function Comparisons() {
 
   return (
     <div>
-      {/* Title */}
-      <div style={{ marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-          <GitCompare size={22} color="#FF6500" />
-          <h2 style={{ fontSize: '20px', fontWeight: 800, color: '#FFFFFF' }}>
-            Cross-Document Comparison & Report Diff (Feature 2 & 7)
-          </h2>
-        </div>
-        <p style={{ color: '#94A3B8', fontSize: '13px' }}>
-          Cross-examine operational outputs between holding companies, subsidiaries, and successive reporting cycles.
-        </p>
-      </div>
+      <PageHeader
+        title="Comparisons"
+      />
 
       {/* Sub-tabs Navigation */}
-      <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
         <button
           className={activeSubTab === 'matrix' ? 'btn-primary' : 'btn-secondary'}
           onClick={() => setActiveSubTab('matrix')}
@@ -76,17 +70,17 @@ export default function Comparisons() {
         <div>
           {/* Executive Summary Card */}
           <div className="gov-card" style={{ marginBottom: '20px', borderLeft: '4px solid #3B82F6' }}>
-            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#F1F5F9', marginBottom: '10px' }}>
+            <h3 style={{ fontSize: '15px', fontWeight: 700, color: '#0d1012', marginBottom: '10px' }}>
               Strategic Synergy & Performance Findings (FY 2024-25)
             </h3>
-            <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#CBD5E1', whiteSpace: 'pre-line' }}>
+            <div style={{ fontSize: '14px', lineHeight: '1.6', color: '#070c13', whiteSpace: 'pre-line' }}>
               {cilCmpdiData.analytical_summary}
             </div>
           </div>
 
           {/* Comparison Matrix Table */}
           <div className="gov-card">
-            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9', marginBottom: '16px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#0b1117', marginBottom: '16px' }}>
               Side-by-Side Subsidiary Operational Comparison
             </h3>
 
@@ -103,16 +97,16 @@ export default function Comparisons() {
                   {cilCmpdiData.matrix?.map((row, i) => (
                     <tr key={i}>
                       <td>
-                        <strong style={{ color: '#F8FAFC' }}>{row.dimension}</strong>
+                        <strong style={{ color: '#0d151c' }}>{row.dimension}</strong>
                       </td>
                       <td>
-                        <div style={{ color: '#E2E8F0', marginBottom: '6px' }}>{row.cil}</div>
+                        <div style={{ color: '#0c1520', marginBottom: '6px' }}>{row.cil}</div>
                         <span style={{ fontSize: '11px', color: '#3B82F6', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <FileText size={11} /> {row.source_cil}
                         </span>
                       </td>
                       <td>
-                        <div style={{ color: '#E2E8F0', marginBottom: '6px' }}>{row.cmpdi}</div>
+                        <div style={{ color: '#091019', marginBottom: '6px' }}>{row.cmpdi}</div>
                         <span style={{ fontSize: '11px', color: '#FF6500', display: 'flex', alignItems: 'center', gap: '4px' }}>
                           <FileText size={11} /> {row.source_cmpdi}
                         </span>
@@ -131,11 +125,10 @@ export default function Comparisons() {
         <div className="gov-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
             <div>
-              <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#F1F5F9' }}>
+              <h3 style={{ fontSize: '16px', fontWeight: 700, color: '#101213' }}>
                 Report Diff: {diffData.document_a} ➔ {diffData.document_b}
               </h3>
               <span style={{ fontSize: '12px', color: '#64748B' }}>
-                Detects section additions, metric alterations, and decommissioned indicators
               </span>
             </div>
 
@@ -171,9 +164,9 @@ export default function Comparisons() {
                         {item.category}
                       </span>
                     </td>
-                    <td><strong style={{ color: '#F1F5F9' }}>{item.section}</strong></td>
-                    <td style={{ color: '#CBD5E1', fontSize: '13px' }}>{item.description}</td>
-                    <td style={{ color: '#94A3B8', fontSize: '12px' }}>{item.old_value}</td>
+                    <td><strong style={{ color: '#11161c' }}>{item.section}</strong></td>
+                    <td style={{ color: '#16181a', fontSize: '13px' }}>{item.description}</td>
+                    <td style={{ color: '#111111', fontSize: '12px' }}>{item.old_value}</td>
                     <td style={{ color: '#FF6500', fontWeight: 600, fontSize: '12px' }}>{item.new_value}</td>
                   </tr>
                 ))}

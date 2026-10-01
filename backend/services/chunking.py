@@ -41,34 +41,30 @@ def chunk_text(
     while start < text_length:
         end = min(start + chunk_size, text_length)
 
-        # Try to break at paragraph or newline or period
         if end < text_length:
-            # Look backwards for a natural break point
-            break_point = -1
-            search_window = text[max(start, end - 150):end]
-            
-            # Check for double newline
-            dnl = search_window.rfind("\n\n")
-            if dnl != -1:
-                break_point = max(start, end - 150) + dnl + 2
-            else:
-                # Check for period followed by space or newline
-                match = re.search(r'\.\s+', search_window[::-1])
-                if match:
-                    break_point = end - match.start()
-                else:
-                    # Check for single newline
-                    nl = search_window.rfind("\n")
-                    if nl != -1:
-                        break_point = max(start, end - 150) + nl + 1
-                    else:
-                        # Check for space
-                        sp = search_window.rfind(" ")
-                        if sp != -1:
-                            break_point = max(start, end - 150) + sp + 1
+            # Look backwards in the search window for a natural boundary
+            window_start = max(start, end - 150)
+            search_window = text[window_start:end]
 
-            if break_point > start:
-                end = break_point
+            # Priority 1: Double newline (paragraph break)
+            dnl_idx = search_window.rfind("\n\n")
+            if dnl_idx != -1 and (window_start + dnl_idx + 2) > start:
+                end = window_start + dnl_idx + 2
+            else:
+                # Priority 2: Sentence terminal (. ! ?) followed by whitespace
+                sentence_breaks = [m.end() for m in re.finditer(r'[\.\?\!]\s+', search_window)]
+                if sentence_breaks and (window_start + sentence_breaks[-1]) > start:
+                    end = window_start + sentence_breaks[-1]
+                else:
+                    # Priority 3: Single newline
+                    nl_idx = search_window.rfind("\n")
+                    if nl_idx != -1 and (window_start + nl_idx + 1) > start:
+                        end = window_start + nl_idx + 1
+                    else:
+                        # Priority 4: Space
+                        sp_idx = search_window.rfind(" ")
+                        if sp_idx != -1 and (window_start + sp_idx + 1) > start:
+                            end = window_start + sp_idx + 1
 
         chunk_str = text[start:end].strip()
         if chunk_str:

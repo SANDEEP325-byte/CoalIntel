@@ -6,13 +6,15 @@ from pathlib import Path
 from bson import ObjectId
 import pymupdf
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, Query, BackgroundTasks
+from fastapi import APIRouter, File, HTTPException, UploadFile, Query, BackgroundTasks, Depends
 from database.mongodb import documents_collection, chunks_collection
 from services.chunking import chunk_text
 from services.embedding import generate_embeddings_batch
 from services.document_health import get_all_documents_health
 from services.reindex import reindex_all, detect_category, format_table_as_markdown
 from services.semantic_search import invalidate_embedding_cache
+from services.auth import require_permission
+from services.audit import log_audit_event
 
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
@@ -57,7 +59,10 @@ def detect_fiscal_year(filename: str) -> str:
 
 
 @router.post("/upload")
-async def upload_document(file: UploadFile = File(...)):
+async def upload_document(
+    file: UploadFile = File(...),
+    current_user: Dict[str, Any] = Depends(require_permission("document.upload")),
+):
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file selected")
 
@@ -194,6 +199,22 @@ async def upload_document(file: UploadFile = File(...)):
         chunks_collection.insert_many(chunk_docs)
         invalidate_embedding_cache()
 
+    log_audit_event(
+        action="document.upload",
+        resource="document",
+        user_id=str(current_user["_id"]),
+        username=current_user.get("username"),
+        resource_id=str(doc_id),
+        status="success",
+        metadata={
+            "filename": safe_filename,
+            "category": category,
+            "pages": page_count,
+            "chunks_indexed": len(raw_chunks),
+            "content_hash": content_hash,
+        },
+    )
+
     return {
         "message": "Document uploaded, parsed with page-awareness, and indexed successfully",
         "document_id": str(doc_id),
@@ -217,6 +238,7 @@ def get_documents(
     category: Optional[str] = Query(None),
     organization: Optional[str] = Query(None),
     fiscal_year: Optional[str] = Query(None),
+    current_user: Dict[str, Any] = Depends(require_permission("document.read")),
 ):
     criteria = {}
     if category:
@@ -243,30 +265,43 @@ def get_documents(
             "tables_detected": d.get("tables_detected", 0),
             "chunks_count": chunks_collection.count_documents({"document_id": d["_id"]}),
             "processing_status": d.get("processing_status", "processed"),
-            "uploaded_at": d.get("uploaded_at", datetime.now(timezone.utc)).isoformat(),
+            "uploaded_at": d.get("uploaded_at", datetime.now(timezone.utc)).isoformat() if hasattr(d.get("uploaded_at"), "isoformat") else str(d.get("uploaded_at")),
         })
 
     return {"count": len(result), "documents": result}
 
 
 @router.get("/health")
-def get_documents_health():
+def get_documents_health(
+    current_user: Dict[str, Any] = Depends(require_permission("document.read")),
+):
     """Returns deep diagnostic health and ingestion stats for all documents."""
     return get_all_documents_health()
 
 
 @router.post("/reindex")
-def trigger_reindex(background_tasks: BackgroundTasks):
+def trigger_reindex(
+    background_tasks: BackgroundTasks,
+    current_user: Dict[str, Any] = Depends(require_permission("document.reindex")),
+):
     """Triggers complete re-indexing in the background."""
     invalidate_embedding_cache()
     background_tasks.add_task(reindex_all, force=True)
+    log_audit_event(
+        action="document.reindex",
+        resource="system",
+        user_id=str(current_user["_id"]),
+        username=current_user.get("username"),
+        status="success",
+    )
     return {"message": "Background re-indexing initiated", "status": "started"}
 
 
 @router.get("/check-duplicate")
 def check_duplicate_document(
     content_hash: Optional[str] = Query(None, description="SHA-256 hash of document content"),
-    filename: Optional[str] = Query(None, description="Filename to check")
+    filename: Optional[str] = Query(None, description="Filename to check"),
+    current_user: Dict[str, Any] = Depends(require_permission("document.read")),
 ):
     """Checks if a document with the given content hash or filename already exists."""
     if not content_hash and not filename:
@@ -290,7 +325,10 @@ def check_duplicate_document(
 
 
 @router.get("/{document_id}")
-def get_document(document_id: str):
+def get_document(
+    document_id: str,
+    current_user: Dict[str, Any] = Depends(require_permission("document.read")),
+):
     if not ObjectId.is_valid(document_id):
         raise HTTPException(status_code=400, detail="Invalid document ID")
 
@@ -319,14 +357,17 @@ def get_document(document_id: str):
         "document_category": document.get("document_category", "Uncategorized"),
         "tables_detected": document.get("tables_detected", 0),
         "processing_status": document.get("processing_status", "processed"),
-        "uploaded_at": document.get("uploaded_at", datetime.now(timezone.utc)).isoformat(),
+        "uploaded_at": document.get("uploaded_at", datetime.now(timezone.utc)).isoformat() if hasattr(document.get("uploaded_at"), "isoformat") else str(document.get("uploaded_at")),
         "extracted_text_preview": document.get("extracted_text", "")[:2000],
         "chunks_sample": chunks,
     }
 
 
 @router.delete("/{document_id}")
-def delete_document(document_id: str):
+def delete_document(
+    document_id: str,
+    current_user: Dict[str, Any] = Depends(require_permission("document.delete")),
+):
     """
     Deletes a document record, physical file, and all cascading vector chunks from MongoDB.
     Refreshes in-memory embedding cache immediately.
@@ -348,12 +389,21 @@ def delete_document(document_id: str):
 
     # Delete all associated chunks
     deleted_chunks = chunks_collection.delete_many({"document_id": oid})
-    # Also clean by document_name if present
     if filename:
         chunks_collection.delete_many({"document_name": filename})
 
     documents_collection.delete_one({"_id": oid})
     invalidate_embedding_cache()
+
+    log_audit_event(
+        action="document.delete",
+        resource="document",
+        user_id=str(current_user["_id"]),
+        username=current_user.get("username"),
+        resource_id=document_id,
+        status="success",
+        metadata={"filename": filename, "deleted_chunks": deleted_chunks.deleted_count},
+    )
 
     return {
         "message": f"Document '{filename}' and {deleted_chunks.deleted_count} chunks successfully deleted",
@@ -364,12 +414,16 @@ def delete_document(document_id: str):
 
 
 @router.post("/{document_id}/reprocess")
-def reprocess_document(document_id: str):
+def reprocess_document(
+    document_id: str,
+    current_user: Dict[str, Any] = Depends(require_permission("document.reprocess")),
+):
     """Reprocesses an existing document to regenerate tables, chunks, and metadata."""
     if not ObjectId.is_valid(document_id):
         raise HTTPException(status_code=400, detail="Invalid document ID")
 
-    doc = documents_collection.find_one({"_id": ObjectId(document_id)})
+    oid = ObjectId(document_id)
+    doc = documents_collection.find_one({"_id": oid})
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
@@ -377,5 +431,133 @@ def reprocess_document(document_id: str):
     if not file_path_str or not Path(file_path_str).exists():
         raise HTTPException(status_code=400, detail="Physical file missing on server disk")
 
-    invalidate_embedding_cache()
-    return {"message": f"Document '{doc.get('filename')}' marked for re-indexing", "status": "reindexed"}
+    file_path = Path(file_path_str)
+    safe_filename = doc.get("filename", file_path.name)
+    content = file_path.read_bytes()
+    content_hash = calculate_content_hash(content)
+    category = detect_category(safe_filename)
+    organization = detect_organization(safe_filename)
+    fiscal_year = detect_fiscal_year(safe_filename)
+
+    try:
+        pdf = pymupdf.open(file_path)
+        page_count = len(pdf)
+        raw_chunks = []
+        full_text_parts = []
+        tables_found_total = 0
+
+        for page_idx in range(page_count):
+            page_num = page_idx + 1
+            page = pdf[page_idx]
+
+            try:
+                tables = page.find_tables()
+                if tables and tables.tables:
+                    for t_idx, tab in enumerate(tables):
+                        md_table = format_table_as_markdown(tab)
+                        if md_table and len(md_table) > 30:
+                            tables_found_total += 1
+                            table_chunk_text = f"[TABLE: Page {page_num} - Table {t_idx+1}]\n{md_table}"
+                            raw_chunks.append({
+                                "text": table_chunk_text,
+                                "page_number": page_num,
+                                "is_table": True,
+                            })
+                            full_text_parts.append(table_chunk_text)
+            except Exception:
+                pass
+
+            page_text = page.get_text().strip()
+            if page_text:
+                full_text_parts.append(page_text)
+                t_chunks = chunk_text(
+                    page_text,
+                    chunk_size=900,
+                    overlap=150,
+                    page_number=page_num,
+                    is_table=False,
+                )
+                for tc in t_chunks:
+                    raw_chunks.append(tc)
+
+        pdf.close()
+        full_text = "\n\n".join(full_text_parts)
+
+        chunks_collection.delete_many({"document_id": oid})
+        chunks_collection.delete_many({"document_name": safe_filename})
+
+        now_iso = datetime.now(timezone.utc)
+        documents_collection.update_one(
+            {"_id": oid},
+            {"$set": {
+                "content_hash": content_hash,
+                "organization": organization,
+                "fiscal_year": fiscal_year,
+                "page_count": page_count,
+                "characters_extracted": len(full_text),
+                "extracted_text": full_text,
+                "document_category": category,
+                "tables_detected": tables_found_total,
+                "chunks_count": len(raw_chunks),
+                "processing_status": "processed",
+                "reprocessed_at": now_iso,
+            }}
+        )
+
+        if raw_chunks:
+            chunk_texts = [c["text"] for c in raw_chunks]
+            embeddings = generate_embeddings_batch(chunk_texts, batch_size=32)
+
+            chunk_docs = []
+            for i, (rc, emb) in enumerate(zip(raw_chunks, embeddings)):
+                text_str = rc["text"]
+                chunk_docs.append({
+                    "document_id": oid,
+                    "document_name": safe_filename,
+                    "document_category": category,
+                    "organization": organization,
+                    "fiscal_year": fiscal_year,
+                    "chunk_index": i,
+                    "page_number": rc["page_number"],
+                    "text": text_str,
+                    "is_table": rc.get("is_table", False),
+                    "character_count": len(text_str),
+                    "token_estimate": max(1, len(text_str) // 4),
+                    "embedding": emb,
+                })
+
+            chunks_collection.insert_many(chunk_docs)
+
+        invalidate_embedding_cache()
+
+        log_audit_event(
+            action="document.reprocess",
+            resource="document",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            resource_id=document_id,
+            status="success",
+            metadata={"filename": safe_filename, "chunks_indexed": len(raw_chunks)},
+        )
+
+        return {
+            "message": f"Document '{safe_filename}' successfully reprocessed and re-indexed",
+            "document_id": document_id,
+            "filename": safe_filename,
+            "chunks_count": len(raw_chunks),
+            "pages": page_count,
+            "status": "processed",
+        }
+
+    except Exception as exc:
+        log_audit_event(
+            action="document.reprocess",
+            resource="document",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            resource_id=document_id,
+            status="failure",
+            metadata={"error": str(exc)},
+        )
+        raise HTTPException(status_code=500, detail=f"Failed to reprocess document: {exc}")
+

@@ -5,6 +5,8 @@ export default function AppShell({
   activeTab, 
   setActiveTab, 
   healthData, 
+  currentUser,
+  onLogout,
   children 
 }) {
   return (
@@ -13,6 +15,8 @@ export default function AppShell({
         activeTab={activeTab} 
         setActiveTab={setActiveTab} 
         healthData={healthData} 
+        currentUser={currentUser}
+        onLogout={onLogout}
       />
 
       <div className="app-main-wrapper">

@@ -16,6 +16,8 @@ env/
 # Uploaded/generated documents
 uploads/
 data/
+migration_backups/
+*.bson
 
 # IDE
 .vscode/

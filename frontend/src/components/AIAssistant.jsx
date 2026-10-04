@@ -69,7 +69,7 @@ function formatCleanResponse(rawText) {
   return formattedLines.join('\n');
 }
 
-export default function AIAssistant({ initialQuestion, onSwitchTab }) {
+export default function AIAssistant({ initialQuestion, onSwitchTab, scopedDoc = null, onClearScope = null }) {
   const [question, setQuestion] = useState(initialQuestion || "What was CIL's coal dispatch in FY 2024-25?");
   const [category, setCategory] = useState('');
   const [loading, setLoading] = useState(false);
@@ -86,7 +86,7 @@ export default function AIAssistant({ initialQuestion, onSwitchTab }) {
       setQuestion(initialQuestion);
       handleExecuteQuery(initialQuestion);
     }
-  }, [initialQuestion]);
+  }, [initialQuestion, scopedDoc]);
 
   async function loadDocuments() {
     try {
@@ -105,7 +105,8 @@ export default function AIAssistant({ initialQuestion, onSwitchTab }) {
     setResponse(null);
 
     try {
-      const res = await api.queryAssistant(q, 5, category || null);
+      const docId = scopedDoc?.document_id || null;
+      const res = await api.queryAssistant(q, 5, category || null, docId);
       setResponse(res);
     } catch (err) {
       setResponse({
@@ -194,6 +195,44 @@ VERIFICATION NOTE: Generated strictly from indexed statutory filings.`;
 
       {/* 2. Top Query Input Box */}
       <div className="gov-card" style={{ marginBottom: '16px', padding: '16px 20px' }}>
+        {scopedDoc && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '8px 12px',
+            marginBottom: '14px',
+            backgroundColor: 'rgba(249, 115, 22, 0.1)',
+            border: '1px solid rgba(249, 115, 22, 0.3)',
+            borderRadius: 'var(--radius-sm)',
+            fontSize: '12.5px',
+            color: '#F97316'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FileText size={15} />
+              <span>
+                <strong>Document Scoped Query:</strong> Restricted exclusively to <em>{scopedDoc.filename}</em>
+              </span>
+            </div>
+            {onClearScope && (
+              <button
+                type="button"
+                onClick={onClearScope}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#CBD5E1',
+                  cursor: 'pointer',
+                  fontSize: '11.5px',
+                  textDecoration: 'underline'
+                }}
+              >
+                Clear Scope (Query All Documents)
+              </button>
+            )}
+          </div>
+        )}
+
         <form onSubmit={(e) => { e.preventDefault(); handleExecuteQuery(); }}>
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: '320px' }}>

@@ -16,7 +16,10 @@ from services.report_generator import generate_subsidiary_kpi_csv
 class TestMasterEnhancements(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.client = TestClient(app)
+        from services.auth import create_access_token, bootstrap_rbac_and_users
+        bootstrap_rbac_and_users()
+        admin_token = create_access_token({"sub": "admin", "username": "admin", "role": "ADMIN"})
+        cls.client = TestClient(app, headers={"Authorization": f"Bearer {admin_token}"})
 
     def test_01_in_memory_embedding_cache(self):
         """Verifies that in-memory cache populates, accelerates searches, and invalidates properly."""

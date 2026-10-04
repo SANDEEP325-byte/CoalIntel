@@ -15,7 +15,7 @@ import StatusBadge from './common/StatusBadge';
 import LoadingState from './common/LoadingState';
 import { api } from '../api';
 
-export default function Reports() {
+export default function Reports({ currentUser }) {
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(false);
   const [copied, setCopied] = useState(false);

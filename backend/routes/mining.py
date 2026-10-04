@@ -1,5 +1,5 @@
-from typing import Optional
-from fastapi import APIRouter, HTTPException, Query
+from typing import Optional, Dict, Any
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from services.mining_knowledge import (
     get_mining_glossary,
@@ -11,6 +11,8 @@ from services.mining_knowledge import (
     generate_decision_brief,
     get_preset_decision_briefs,
 )
+from services.auth import require_permission
+from services.audit import log_audit_event
 
 router = APIRouter(prefix="/mining", tags=["Mining Decision Support"])
 
@@ -110,12 +112,35 @@ def fetch_decision_briefs():
 
 
 @router.post("/decision-brief")
-def create_decision_brief(req: DecisionBriefRequest):
+def create_decision_brief(
+    req: DecisionBriefRequest,
+    current_user: Dict[str, Any] = Depends(require_permission("report.generate")),
+):
     """Generates a structured Mining Decision Brief based on verified document evidence."""
     if not req.topic.strip():
         raise HTTPException(status_code=400, detail="Topic cannot be empty")
     try:
-        return generate_decision_brief(topic=req.topic, document_id=req.document_id)
+        res = generate_decision_brief(topic=req.topic, document_id=req.document_id)
+
+        log_audit_event(
+            action="report.generate_brief",
+            resource="decision_brief",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="success",
+            metadata={"topic": req.topic[:100], "document_id": req.document_id},
+        )
+
+        return res
     except Exception as exc:
+        log_audit_event(
+            action="report.generate_brief",
+            resource="decision_brief",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="failure",
+            metadata={"topic": req.topic[:100], "error": str(exc)},
+        )
         raise HTTPException(status_code=500, detail=str(exc))
+
 

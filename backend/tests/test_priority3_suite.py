@@ -18,7 +18,10 @@ class Priority3TestSuite(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.client = TestClient(app)
+        from services.auth import create_access_token, bootstrap_rbac_and_users
+        bootstrap_rbac_and_users()
+        admin_token = create_access_token({"sub": "admin", "username": "admin", "role": "ADMIN"})
+        cls.client = TestClient(app, headers={"Authorization": f"Bearer {admin_token}"})
 
     # -------------------------------------------------------------
     # 1. PARLIAMENTARY QUERY ASSISTANT TESTS

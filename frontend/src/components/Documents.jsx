@@ -20,7 +20,7 @@ import EmptyState from './common/EmptyState';
 import LoadingState from './common/LoadingState';
 import { api } from '../api';
 
-export default function Documents({ onAskQuestion }) {
+export default function Documents({ onAskQuestion, currentUser }) {
   const [documents, setDocuments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -169,13 +169,13 @@ export default function Documents({ onAskQuestion }) {
             <span>Inspect</span>
           </button>
           <button
-            onClick={() => onAskQuestion(`Summarize key findings from ${row.filename}`)}
+            onClick={() => onAskQuestion(`What are the major operational activities and key figures in this report?`, { document_id: row.id, filename: row.filename })}
             className="btn-subtle"
-            style={{ padding: '3px 8px', fontSize: '11.5px' }}
-            title="Ask question on this document"
+            style={{ padding: '3px 10px', fontSize: '11.5px', color: '#F97316', border: '1px solid rgba(249, 115, 22, 0.3)' }}
+            title="Ask question scoped specifically to this document"
           >
-            <Bot size={13} />
-            <span>Query</span>
+            <Bot size={13} style={{ marginRight: '4px' }} />
+            <span>Ask About This Document</span>
           </button>
         </div>
       )
@@ -214,37 +214,39 @@ export default function Documents({ onAskQuestion }) {
       )}
 
       {/* Practical Upload Area (Clean, Non-Flashy Enterprise) */}
-      <div className="gov-card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
-          <div>
-            <h3 style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
-              Ingest Statutory Report (PDF)
-            </h3>
-            <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
-              Upload an operational, geological, or financial filing to extract text and generate 384-D vector chunks.
-            </p>
-          </div>
+      {currentUser?.role !== 'VIEWER' && (
+        <div className="gov-card" style={{ marginBottom: '20px', padding: '16px 20px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+            <div>
+              <h3 style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+                Ingest Statutory Report (PDF)
+              </h3>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: '2px 0 0' }}>
+                Upload an operational, geological, or financial filing to extract text and generate 384-D vector chunks.
+              </p>
+            </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <label 
-              htmlFor="doc-upload" 
-              className="btn-primary"
-              style={{ cursor: uploading ? 'wait' : 'pointer' }}
-            >
-              <Upload size={14} />
-              <span>{uploading ? 'Processing & Ingesting...' : 'Select PDF File'}</span>
-            </label>
-            <input 
-              id="doc-upload" 
-              type="file" 
-              accept=".pdf" 
-              style={{ display: 'none' }} 
-              onChange={handleFileUpload}
-              disabled={uploading}
-            />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label 
+                htmlFor="doc-upload" 
+                className="btn-primary"
+                style={{ cursor: uploading ? 'wait' : 'pointer' }}
+              >
+                <Upload size={14} />
+                <span>{uploading ? 'Processing & Ingesting...' : 'Select PDF File'}</span>
+              </label>
+              <input 
+                id="doc-upload" 
+                type="file" 
+                accept=".pdf" 
+                style={{ display: 'none' }} 
+                onChange={handleFileUpload}
+                disabled={uploading}
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Search & Filter Bar */}
       <div className="gov-card" style={{ marginBottom: '16px', padding: '12px 16px' }}>
@@ -376,13 +378,31 @@ export default function Documents({ onAskQuestion }) {
                   {selectedDocDetails.filename || selectedDocDetails.document_name}
                 </h3>
               </div>
-              <button
-                onClick={() => setSelectedDocDetails(null)}
-                className="btn-subtle"
-                style={{ padding: '6px' }}
-              >
-                <X size={18} />
-              </button>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  onClick={() => {
+                    const docId = selectedDocDetails.id || selectedDocDetails._id;
+                    const docName = selectedDocDetails.filename || selectedDocDetails.document_name;
+                    setSelectedDocDetails(null);
+                    onAskQuestion(`What are the major operational activities and key disclosures in this report?`, {
+                      document_id: docId,
+                      filename: docName
+                    });
+                  }}
+                  className="btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '5px 12px', fontSize: '12px' }}
+                >
+                  <Bot size={13} />
+                  <span>Ask About This Document</span>
+                </button>
+                <button
+                  onClick={() => setSelectedDocDetails(null)}
+                  className="btn-subtle"
+                  style={{ padding: '6px' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </div>
 
             {/* Drawer Content */}

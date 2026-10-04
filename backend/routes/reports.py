@@ -1,8 +1,10 @@
-from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Response, Query
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, HTTPException, Response, Query, Depends
 from pydantic import BaseModel
 from services.report_generator import build_structured_report, export_report_to_docx, generate_subsidiary_kpi_csv
 from services.parliamentary import process_parliamentary_query
+from services.auth import require_permission
+from services.audit import log_audit_event
 from datetime import datetime
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
@@ -24,7 +26,9 @@ class ReportGenerateRequest(BaseModel):
 
 
 @router.get("/templates")
-def get_report_templates():
+def get_report_templates(
+    current_user: Dict[str, Any] = Depends(require_permission("report.view")),
+):
     """Returns available structured intelligence report templates."""
     return {
         "templates": [
@@ -57,19 +61,41 @@ def get_report_templates():
 
 
 @router.post("/generate")
-def generate_report(request: ReportGenerateRequest):
+def generate_report(
+    request: ReportGenerateRequest,
+    current_user: Dict[str, Any] = Depends(require_permission("report.generate")),
+):
     """Generates the full 9-section structured mining intelligence report with tables and sources."""
     try:
         title = request.title or "Annual Mining Performance & Decision Intelligence Report"
         report_type = request.report_type or "comprehensive_annual"
         year = request.year or "2024-25"
-        return build_structured_report(
+        res = build_structured_report(
             title=title,
             report_type=report_type,
             year=year,
             subsidiary=request.subsidiary,
         )
+
+        log_audit_event(
+            action="report.generate",
+            resource="report",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="success",
+            metadata={"title": title, "report_type": report_type, "year": year},
+        )
+
+        return res
     except Exception as exc:
+        log_audit_event(
+            action="report.generate",
+            resource="report",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="failure",
+            metadata={"error": str(exc)},
+        )
         raise HTTPException(status_code=500, detail=str(exc))
 
 
@@ -80,6 +106,7 @@ def download_report_docx(
     report_type: str = Query("comprehensive_annual"),
     year: str = Query("2024-25"),
     subsidiary: Optional[str] = Query(None),
+    current_user: Dict[str, Any] = Depends(require_permission("report.generate")),
 ):
     """Generates and downloads the structured report as a formatted Microsoft Word (.docx) document."""
     try:
@@ -92,6 +119,16 @@ def download_report_docx(
         docx_bytes = export_report_to_docx(report_data)
         safe_name = title.replace(" ", "_").replace("&", "and")[:40]
         filename = f"{safe_name}.docx"
+
+        log_audit_event(
+            action="report.export_docx",
+            resource="report",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="success",
+            metadata={"filename": filename},
+        )
+
         return Response(
             content=docx_bytes,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -103,7 +140,9 @@ def download_report_docx(
 
 @router.get("/export/csv")
 @router.get("/download/csv")
-def download_kpi_csv():
+def download_kpi_csv(
+    current_user: Dict[str, Any] = Depends(require_permission("report.view")),
+):
     """Generates and downloads the verified subsidiary KPI and YoY matrix as a standard CSV file."""
     try:
         csv_data = generate_subsidiary_kpi_csv()
@@ -117,19 +156,45 @@ def download_kpi_csv():
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-
 @router.post("/parliamentary")
-def answer_parliamentary_query(request: ParliamentaryQueryRequest):
+def answer_parliamentary_query(
+    request: ParliamentaryQueryRequest,
+    current_user: Dict[str, Any] = Depends(require_permission("query.execute")),
+):
     """Processes natural language questions in official Government of India parliamentary brief format."""
     if not request.question.strip():
         raise HTTPException(status_code=400, detail="Question cannot be empty.")
     try:
-        return process_parliamentary_query(
+        res = process_parliamentary_query(
             question=request.question,
             question_type=request.question_type or "STARRED",
             house=request.house or "LOK_SABHA",
             session=request.session,
             question_number=request.question_number,
         )
+
+        log_audit_event(
+            action="parliamentary.query",
+            resource="parliamentary",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="success",
+            metadata={
+                "question": request.question[:120],
+                "question_type": request.question_type,
+                "confidence": res.get("confidence_score"),
+            },
+        )
+
+        return res
     except Exception as exc:
+        log_audit_event(
+            action="parliamentary.query",
+            resource="parliamentary",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="failure",
+            metadata={"question": request.question[:120], "error": str(exc)},
+        )
         raise HTTPException(status_code=500, detail=str(exc))
+

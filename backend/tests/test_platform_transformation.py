@@ -24,7 +24,10 @@ from services.mining_knowledge import (
     summarize_mining_report
 )
 
-client = TestClient(app)
+from services.auth import create_access_token, bootstrap_rbac_and_users
+bootstrap_rbac_and_users()
+admin_token = create_access_token({"sub": "admin", "username": "admin", "role": "ADMIN"})
+client = TestClient(app, headers={"Authorization": f"Bearer {admin_token}"})
 
 
 class TestPlatformTransformation(unittest.TestCase):

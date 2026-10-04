@@ -2,8 +2,31 @@ const API_BASE = typeof window !== 'undefined' && window.location.port === '8000
   ? '' 
   : 'http://127.0.0.1:8000';
 
+const TOKEN_KEY = 'coalintel_access_token';
+
+export function getStoredToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setStoredToken(token) {
+  if (typeof window === 'undefined') return;
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
+
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
+  const headers = { ...(options.headers || {}) };
+  const token = getStoredToken();
+  if (token && !headers['Authorization']) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  options.headers = headers;
+
   try {
     const res = await fetch(url, options);
     if (!res.ok) {
@@ -139,4 +162,64 @@ export const api = {
   getProducersComparison: () => request('/mining/producers-comparison'),
   getMiningStats: (documentId = null) =>
     request(documentId ? `/mining/extracted-statistics?document_id=${encodeURIComponent(documentId)}` : '/mining/extracted-statistics'),
+
+  // Document Maintenance (Reprocess & Delete)
+  deleteDocument: (documentId) =>
+    request(`/documents/${documentId}`, { method: 'DELETE' }),
+  reprocessDocument: (documentId) =>
+    request(`/documents/${documentId}/reprocess`, { method: 'POST' }),
+
+  // Authentication & RBAC Administration
+  login: async (username, password) => {
+    const res = await request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (res && res.access_token) {
+      setStoredToken(res.access_token);
+    }
+    return res;
+  },
+  logout: async () => {
+    try {
+      await request('/auth/logout', { method: 'POST' });
+    } catch (_) {}
+    setStoredToken(null);
+  },
+  register: async (registrationData) => {
+    return request('/auth/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(registrationData),
+    });
+  },
+  getRegistrationStatus: () => request('/auth/registration-status'),
+  getMe: () => request('/auth/me'),
+  getRoles: () => request('/auth/roles'),
+  getUsers: () => request('/auth/users'),
+  createUser: (userData) =>
+    request('/auth/users', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData),
+    }),
+  updateUserStatus: (userId, is_active) =>
+    request(`/auth/users/${userId}/status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_active }),
+    }),
+  updateUserRole: (userId, role) =>
+    request(`/auth/users/${userId}/role`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    }),
+  getAuditLogs: (limit = 100, action = null, userId = null) => {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (action) params.append('action', action);
+    if (userId) params.append('user_id', userId);
+    return request(`/auth/audit-logs?${params.toString()}`);
+  },
 };

@@ -1,5 +1,5 @@
-from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query
+from typing import Optional, List, Dict, Any
+from fastapi import APIRouter, HTTPException, Query, Depends
 from pydantic import BaseModel
 from datetime import datetime, timezone
 
@@ -7,6 +7,8 @@ from services.rag import generate_answer
 from services.hybrid_search import hybrid_search
 from services.intent import classify_intent
 from database.mongodb import conversations_collection, search_history_collection
+from services.auth import require_permission
+from services.audit import log_audit_event
 
 router = APIRouter(prefix="/query", tags=["Query & Conversations"])
 
@@ -32,7 +34,10 @@ class SearchRequest(BaseModel):
 
 @router.post("")
 @router.post("/")
-def query_documents(request: QueryRequest):
+def query_documents(
+    request: QueryRequest,
+    current_user: Dict[str, Any] = Depends(require_permission("query.execute")),
+):
     """Executes grounded AI chat answer with three-tier output separation, page citations, and conversation history."""
     if not request.question.strip():
         raise HTTPException(
@@ -41,7 +46,7 @@ def query_documents(request: QueryRequest):
         )
 
     try:
-        return generate_answer(
+        res = generate_answer(
             request.question,
             top_k=request.top_k,
             document_id=request.document_id,
@@ -50,7 +55,32 @@ def query_documents(request: QueryRequest):
             fiscal_year=request.fiscal_year,
             session_id=request.session_id,
         )
+
+        log_audit_event(
+            action="query.execute",
+            resource="rag",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="success",
+            metadata={
+                "question": request.question[:120],
+                "top_k": request.top_k,
+                "document_id": request.document_id,
+                "confidence": res.get("confidence"),
+                "sources_count": len(res.get("sources", [])),
+            },
+        )
+
+        return res
     except Exception as exc:
+        log_audit_event(
+            action="query.execute",
+            resource="rag",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="failure",
+            metadata={"question": request.question[:120], "error": str(exc)},
+        )
         raise HTTPException(
             status_code=500,
             detail=f"Query failed: {exc}",
@@ -58,7 +88,10 @@ def query_documents(request: QueryRequest):
 
 
 @router.post("/search")
-def search_documents(request: SearchRequest):
+def search_documents(
+    request: SearchRequest,
+    current_user: Dict[str, Any] = Depends(require_permission("document.search")),
+):
     """Executes hybrid retrieval (Dense Semantic + Full-Text Keyword) without calling the LLM."""
     if not request.query.strip():
         raise HTTPException(status_code=400, detail="Search query cannot be empty")
@@ -79,6 +112,7 @@ def search_documents(request: SearchRequest):
         }
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Search failed: {exc}")
+
 
 
 @router.get("/intent")

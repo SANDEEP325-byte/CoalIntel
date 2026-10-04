@@ -14,13 +14,24 @@ from routes.comparison import router as comparison_router
 from routes.reports import router as reports_router
 from routes.topics import router as topics_router
 from routes.mining import router as mining_router
-from database.mongodb import check_database_connection, documents_collection, chunks_collection
+from routes.auth import router as auth_router
+from database.mongodb import check_database_connection, get_database_status, documents_collection, chunks_collection, ensure_indexes
+from services.auth import bootstrap_rbac_and_users
 
 app = FastAPI(
     title="CoalIntel API",
     description="AI-Powered Mining Knowledge, Reporting and Decision Intelligence Platform (SIH26023)",
     version="1.0.0",
 )
+
+@app.on_event("startup")
+def startup_event():
+    """Ensure database indexes and bootstrap default roles/users safely."""
+    try:
+        ensure_indexes()
+        bootstrap_rbac_and_users()
+    except Exception as exc:
+        print(f"Startup initialization notice: {exc}")
 
 # Enable CORS for frontend development and demo
 ALLOWED_ORIGINS = [
@@ -41,6 +52,7 @@ app.add_middleware(
 )
 
 # Include all feature routers
+app.include_router(auth_router)
 app.include_router(documents_router)
 app.include_router(query_router)
 app.include_router(analytics_router)
@@ -50,17 +62,21 @@ app.include_router(topics_router)
 app.include_router(mining_router)
 
 
+
 @app.get("/api/status")
 def api_status():
+    db_status = get_database_status()
+    db_ok = db_status.get("connected", False)
     return {
         "message": "CoalIntel — AI-Powered Mining Knowledge, Reporting and Decision Intelligence Platform",
         "status": "online",
         "version": "1.0.0",
         "sih_problem_statement": "SIH26023",
         "database": {
-            "connected": check_database_connection(),
-            "documents_count": documents_collection.count_documents({}),
-            "chunks_count": chunks_collection.count_documents({}),
+            "connected": db_ok,
+            "deployment": db_status.get("deployment", "MongoDB"),
+            "documents_count": documents_collection.count_documents({}) if db_ok else 0,
+            "chunks_count": chunks_collection.count_documents({}) if db_ok else 0,
         },
         "ai_provider": ai_gateway.get_active_provider_name(),
         "llm_model": f"{ai_gateway.get_active_provider_name().capitalize()} / {ai_gateway.get_active_model_name()}",
@@ -90,7 +106,8 @@ def check_ollama_status() -> dict:
 
 @app.get("/health")
 def health_check():
-    db_ok = check_database_connection()
+    db_status = get_database_status()
+    db_ok = db_status.get("connected", False)
     llm_info = ai_gateway.check_health()
     overall_ok = db_ok and llm_info.get("available", False)
 
@@ -98,6 +115,7 @@ def health_check():
         "status": "healthy" if overall_ok else ("partial_degraded" if db_ok else "database_disconnected"),
         "service": "CoalIntel Backend",
         "database_connected": db_ok,
+        "database_deployment": db_status.get("deployment", "MongoDB"),
         "indexed_documents": documents_collection.count_documents({}) if db_ok else 0,
         "indexed_chunks": chunks_collection.count_documents({}) if db_ok else 0,
         "ai_provider": ai_gateway.get_active_provider_name(),

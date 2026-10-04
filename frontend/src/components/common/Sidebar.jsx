@@ -13,11 +13,14 @@ import {
   ShieldAlert,
   Network,
   Landmark,
-  Play
+  Play,
+  LogOut
 } from 'lucide-react';
 
-export default function Sidebar({ activeTab, setActiveTab, healthData }) {
+export default function Sidebar({ activeTab, setActiveTab, healthData, currentUser, onLogout }) {
   const [specializedOpen, setSpecializedOpen] = useState(false);
+
+  const userRole = (currentUser?.role || 'ADMIN').toUpperCase();
 
   const mainNav = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -26,6 +29,7 @@ export default function Sidebar({ activeTab, setActiveTab, healthData }) {
     { id: 'analytics', label: 'Mining Insights', icon: BarChart3 },
     { id: 'reports', label: 'Report Generator', icon: FileSpreadsheet },
     { id: 'decision_brief', label: 'Decision Briefs', icon: Compass },
+    ...(userRole === 'ADMIN' ? [{ id: 'users_roles', label: 'Users & Roles', icon: ShieldAlert }] : []),
     { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ];
 
@@ -75,6 +79,45 @@ export default function Sidebar({ activeTab, setActiveTab, healthData }) {
         }}>
           <span style={{ color: '#F8FAFC' }}>COAL</span>
           <span style={{ color: '#F97316' }}>INTEL</span>
+        </div>
+      </div>
+
+      {/* Authenticated User Profile */}
+      <div style={{
+        padding: '12px 14px',
+        backgroundColor: '#0a1322',
+        borderBottom: '1px solid var(--navy-border)',
+        fontSize: '12px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ minWidth: 0, flex: 1, marginRight: '8px' }}>
+            <div style={{ 
+              fontWeight: 600, 
+              color: '#F8FAFC', 
+              overflow: 'hidden', 
+              textOverflow: 'ellipsis', 
+              whiteSpace: 'nowrap' 
+            }}>
+              {currentUser?.full_name || currentUser?.username || 'User'}
+            </div>
+            <div style={{ fontSize: '11px', color: '#64748B', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              @{currentUser?.username} • {currentUser?.email || ''}
+            </div>
+          </div>
+
+          <span style={{
+            fontSize: '10px',
+            fontWeight: 700,
+            padding: '2px 7px',
+            borderRadius: '4px',
+            backgroundColor: userRole === 'ADMIN' ? 'rgba(249, 115, 22, 0.15)' : userRole === 'ANALYST' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(167, 139, 250, 0.15)',
+            color: userRole === 'ADMIN' ? '#F97316' : userRole === 'ANALYST' ? '#38BDF8' : '#A78BFA',
+            letterSpacing: '0.4px',
+            fontFamily: 'var(--font-mono)',
+            flexShrink: 0
+          }}>
+            {userRole}
+          </span>
         </div>
       </div>
 
@@ -230,6 +273,40 @@ export default function Sidebar({ activeTab, setActiveTab, healthData }) {
             {healthData?.indexed_chunks || 1518}
           </span>
         </div>
+
+        {/* Clear Logout Action */}
+        <button
+          onClick={onLogout}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '8px',
+            width: '100%',
+            padding: '7px 10px',
+            marginTop: '10px',
+            backgroundColor: 'rgba(239, 68, 68, 0.08)',
+            border: '1px solid rgba(239, 68, 68, 0.25)',
+            borderRadius: 'var(--radius-sm)',
+            color: '#F87171',
+            fontSize: '11.5px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease'
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.18)';
+            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
+            e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.25)';
+          }}
+          title="Sign out of current authenticated session"
+        >
+          <LogOut size={13} />
+          <span>Sign Out</span>
+        </button>
       </div>
     </aside>
   );

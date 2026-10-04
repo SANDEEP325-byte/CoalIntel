@@ -39,9 +39,12 @@ import numpy as np
 class TestCoalIntelSuite(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.client = TestClient(app)
         cls.db_connected = check_database_connection()
         print(f"\n[SETUP] Database connected: {cls.db_connected}")
+        from services.auth import create_access_token, bootstrap_rbac_and_users
+        bootstrap_rbac_and_users()
+        admin_token = create_access_token({"sub": "admin", "username": "admin", "role": "ADMIN"})
+        cls.client = TestClient(app, headers={"Authorization": f"Bearer {admin_token}"})
 
     def test_01_health_and_status(self):
         """Test system health and API status endpoints."""

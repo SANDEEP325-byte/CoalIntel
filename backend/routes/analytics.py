@@ -1,9 +1,11 @@
-from fastapi import APIRouter, HTTPException, Query
-from typing import Optional
+from fastapi import APIRouter, HTTPException, Query, Depends
+from typing import Optional, Dict, Any
 from services.kpi_extractor import get_mining_kpis
 from services.lineage import get_data_lineage
 from services.comparison import compare_production_temporal
 from services.contradiction import detect_data_contradictions
+from services.auth import require_permission
+from services.audit import log_audit_event
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -109,7 +111,10 @@ def trigger_dynamic_kpi_extraction():
 
 
 @router.post("/query")
-def execute_natural_language_analytics(payload: dict):
+def execute_natural_language_analytics(
+    payload: dict,
+    current_user: Dict[str, Any] = Depends(require_permission("query.execute")),
+):
     """
     Executes a Natural Language Analytics Query:
     Fuses structured KPI registry records + semantic document chunks,
@@ -120,9 +125,19 @@ def execute_natural_language_analytics(payload: dict):
         raise HTTPException(status_code=400, detail="Query text is required.")
     try:
         from services.rag import generate_analytics_answer
-        return generate_analytics_answer(question=query_text.strip())
+        res = generate_analytics_answer(question=query_text.strip())
+        log_audit_event(
+            action="query.analytics",
+            resource="analytics",
+            user_id=str(current_user["_id"]),
+            username=current_user.get("username"),
+            status="success",
+            metadata={"query": query_text[:100]},
+        )
+        return res
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
 
 
 @router.get("/dgms-compliance")

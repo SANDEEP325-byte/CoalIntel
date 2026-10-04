@@ -11,25 +11,67 @@ MONGO_URI = (
 ).rstrip("/")
 
 DB_NAME = os.getenv("MONGODB_DB", "coalintel")
+DATABASE_MODE = os.getenv("DATABASE_MODE", "auto").lower()
+
+def is_atlas_uri(uri: str) -> bool:
+    """Detect if connection URI targets MongoDB Atlas cloud cluster."""
+    return "mongodb+srv://" in uri or "mongodb.net" in uri
 
 def _init_client():
+    is_atlas = is_atlas_uri(MONGO_URI)
+    
+    if is_atlas:
+        # Atlas Cloud Configuration with standard connection pool and timeout settings
+        try:
+            cli = MongoClient(
+                MONGO_URI,
+                serverSelectionTimeoutMS=8000,
+                connectTimeoutMS=10000,
+                socketTimeoutMS=30000,
+                maxPoolSize=50,
+                minPoolSize=5,
+                retryWrites=True,
+            )
+            cli.admin.command("ping")
+            return cli
+        except Exception as exc:
+            err_msg = str(exc)
+            print("\n" + "!" * 60)
+            print("[COALINTEL DATABASE ERROR] MongoDB Atlas Connection Failed")
+            if "bad auth" in err_msg.lower() or "authentication failed" in err_msg.lower():
+                print(">> Reason: Authentication Failed. Verify Atlas database username and password in .env.")
+            elif "timed out" in err_msg.lower() or "serverselectiontimeouterror" in err_msg.lower():
+                print(">> Reason: Connection Timeout. Verify your IP is added to Atlas IP Access List (0.0.0.0/0).")
+            elif "dnspython" in err_msg.lower():
+                print(">> Reason: DNS Resolution Error for mongodb+srv. Check internet or dnspython package.")
+            else:
+                print(f">> Reason: {err_msg[:120]}")
+            print("!" * 60 + "\n")
+            
+            if DATABASE_MODE == "atlas":
+                # Strict Atlas mode: Do not silently fallback
+                raise RuntimeError(f"Strict Atlas mode enabled (DATABASE_MODE=atlas), cannot connect to Atlas: {err_msg}")
+            
+            # Non-strict mode: Return client (FastAPI will report disconnected status via /health)
+            return cli
+
+    # Local MongoDB Connection Handling
     uris_to_try = [MONGO_URI]
     if "localhost" in MONGO_URI:
         uris_to_try.append(MONGO_URI.replace("localhost", "127.0.0.1"))
     elif "127.0.0.1" in MONGO_URI:
         uris_to_try.append(MONGO_URI.replace("127.0.0.1", "localhost"))
 
-    last_exc = None
     for uri in uris_to_try:
         try:
-            cli = MongoClient(uri, serverSelectionTimeoutMS=2000)
+            cli = MongoClient(uri, serverSelectionTimeoutMS=2000, maxPoolSize=50)
             cli.admin.command("ping")
             return cli
-        except Exception as e:
-            last_exc = e
+        except Exception:
+            pass
 
     # Fallback to standard client even if offline at init
-    return MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000)
+    return MongoClient(MONGO_URI, serverSelectionTimeoutMS=2000, maxPoolSize=50)
 
 client = _init_client()
 db = client[DB_NAME]
@@ -43,6 +85,9 @@ conversations_collection = db["conversations"]
 search_history_collection = db["search_history"]
 mining_glossary_collection = db["mining_glossary"]
 safety_rules_collection = db["safety_rules"]
+users_collection = db["users"]
+roles_collection = db["roles"]
+audit_logs_collection = db["audit_logs"]
 
 def ensure_indexes():
     """Ensure essential indexes exist for fast hybrid retrieval and queries."""
@@ -69,6 +114,20 @@ def ensure_indexes():
         documents_collection.create_index([("organization", ASCENDING)])
         documents_collection.create_index([("fiscal_year", ASCENDING)])
         documents_collection.create_index([("content_hash", ASCENDING)])
+
+        # Users and Roles indexes
+        users_collection.create_index([("username", ASCENDING)], unique=True)
+        users_collection.create_index([("email", ASCENDING)], unique=True)
+        users_collection.create_index([("role", ASCENDING)])
+        users_collection.create_index([("is_active", ASCENDING)])
+
+        roles_collection.create_index([("name", ASCENDING)], unique=True)
+
+        # Audit Logs indexes
+        audit_logs_collection.create_index([("timestamp", ASCENDING)])
+        audit_logs_collection.create_index([("user_id", ASCENDING)])
+        audit_logs_collection.create_index([("action", ASCENDING)])
+        audit_logs_collection.create_index([("resource", ASCENDING)])
 
         # Conversations indexes
         conversations_collection.create_index([("session_id", ASCENDING)], unique=True)
@@ -103,4 +162,15 @@ def check_database_connection():
             client.admin.command("ping")
             return True
         except Exception:
-            return False
+            return False
+
+def get_database_status() -> dict:
+    """Return safe metadata about active database connection without exposing secrets."""
+    is_atlas = is_atlas_uri(MONGO_URI)
+    connected = check_database_connection()
+    return {
+        "connected": connected,
+        "deployment": "MongoDB Atlas (Cloud Cluster)" if is_atlas else "MongoDB (Local Deployment)",
+        "database_name": DB_NAME,
+        "mode": "atlas" if is_atlas else "local",
+    }

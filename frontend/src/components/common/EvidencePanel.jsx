@@ -89,6 +89,16 @@ export default function EvidencePanel({ sources = [], title = "Retrieved Statuto
                   <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
                     Score: {score}
                   </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setExpandedIndex(isExpanded ? -1 : idx);
+                    }}
+                    className="btn-subtle"
+                    style={{ padding: '2px 8px', fontSize: '11px', color: '#38BDF8' }}
+                  >
+                    {isExpanded ? 'Hide Evidence' : 'View Evidence'}
+                  </button>
                   {onViewDocument && (
                     <button
                       onClick={(e) => {
@@ -96,10 +106,11 @@ export default function EvidencePanel({ sources = [], title = "Retrieved Statuto
                         onViewDocument(src);
                       }}
                       className="btn-subtle"
-                      style={{ padding: '2px 6px', fontSize: '11px' }}
+                      style={{ padding: '2px 8px', fontSize: '11px', color: '#F97316' }}
                       title="Inspect document"
                     >
-                      <ExternalLink size={12} />
+                      <ExternalLink size={11} style={{ marginRight: '3px' }} />
+                      View Source
                     </button>
                   )}
                 </div>

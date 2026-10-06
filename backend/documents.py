@@ -19,7 +19,7 @@ from services.audit import log_audit_event
 router = APIRouter(prefix="/documents", tags=["Documents"])
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-UPLOAD_DIR = BASE_DIR / "uploads"
+UPLOAD_DIR = Path("/tmp/uploads") if os.getenv("VERCEL") else BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -560,4 +560,4 @@ def reprocess_document(
             metadata={"error": str(exc)},
         )
         raise HTTPException(status_code=500, detail=f"Failed to reprocess document: {exc}")
-
+

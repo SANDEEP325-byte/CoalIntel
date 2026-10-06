@@ -1,6 +1,7 @@
-const API_BASE = typeof window !== 'undefined' && window.location.port === '8000' 
-  ? '' 
-  : 'http://127.0.0.1:8000';
+const API_BASE = import.meta.env.VITE_API_BASE_URL
+  ?? (typeof window !== 'undefined' && window.location.port === '8000'
+    ? ''
+    : 'http://127.0.0.1:8000');
 
 const TOKEN_KEY = 'coalintel_access_token';
 

@@ -1,3 +1,4 @@
+import os
 import sys
 from pathlib import Path
 from fastapi import FastAPI
@@ -41,6 +42,8 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:8000",
     "http://localhost:3000",
 ]
+
+ALLOWED_ORIGINS += [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
@@ -140,4 +143,4 @@ if dist_dir.exists():
 else:
     @app.get("/")
     def root():
-        return api_status()
+        return api_status()
